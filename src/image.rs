@@ -1,7 +1,7 @@
 pub struct Image {
-    pub width: u32,
-    pub height: u32,
-    pub pixels: Vec<Pixel>,
+    width: u32,
+    height: u32,
+    pixels: Vec<Pixel>,
 }
 
 impl Image {
@@ -21,6 +21,24 @@ impl Image {
     pub fn new_rgba(width: u32, height: u32, pixels: Vec<Pixel>) -> Self {
         debug_assert!(pixels.iter().all(|p| p.is_rgb()));
         Image::new(width, height, pixels)
+    }
+
+    /// Get the image's width.
+    #[must_use]
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    /// Get the image's height.
+    #[must_use]
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Get a reference to the image's pixels.
+    #[must_use]
+    pub fn pixels(&self) -> &[Pixel] {
+        self.pixels.as_ref()
     }
 }
 
