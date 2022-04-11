@@ -1,7 +1,17 @@
+pub mod image;
+
 #[cfg(test)]
 mod tests {
+
+    use image::io::Reader as ImageReader;
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_encode() {
+        let img = ImageReader::open("qoi_test_images/dice.png")?.decode()?;
+        img.
+    }
+
+    fn test_decode() {
+        
     }
 }
