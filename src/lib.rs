@@ -1,50 +1,29 @@
-pub mod image;
+pub mod encoder;
+
+use image::ImageEncoder;
 
 #[cfg(test)]
 mod tests {
 
-    use crate::image::*;
-    use image::{io::Reader as ImageReader, GenericImageView};
+    use std::fs::File;
+    use std::io::{BufWriter, Write};
 
-    fn read_png(filename: &str) -> Image {
-        let img = ImageReader::open(filename)
+    use image::io::Reader as ImageReader;
+    use image::{GenericImageView, ImageEncoder};
+
+    use crate::encoder::QoiEncoder;
+
+    #[test]
+    fn test_encode() {
+        let img = ImageReader::open("qoi_test_images/kodim10.png")
             .unwrap()
             .decode()
             .unwrap();
 
-        let (w, h) = img.dimensions();
-        match img {
-            image::DynamicImage::ImageRgb8(img) => {
-                let pixels = img
-                    .pixels()
-                    .map(|p| Pixel::RGB {
-                        r: p[0],
-                        g: p[1],
-                        b: p[2],
-                    })
-                    .collect();
-                Image::new_rgb(w, h, pixels)
-            }
-
-            image::DynamicImage::ImageRgba8(img) => {
-                let pixels = img
-                    .pixels()
-                    .map(|p| Pixel::RGBA {
-                        r: p[0],
-                        g: p[1],
-                        b: p[2],
-                        a: p[3],
-                    })
-                    .collect();
-                Image::new_rgba(w, h, pixels)
-            }
-            _ => panic!("Incorrect image format"),
-        }
-    }
-
-    #[test]
-    fn test_encode() {
-        
+        let fout = &mut BufWriter::new(File::create("out/test.qoi").unwrap());
+        QoiEncoder::new(fout)
+            .write_image(img.as_bytes(), img.width(), img.height(), img.color())
+            .unwrap();
     }
 
     #[test]
