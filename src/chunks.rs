@@ -1,13 +1,36 @@
 #![allow(non_camel_case_types)]
 
-//Leaving this in for now, in case it's useful for decoding
+use std::io::Write;
+
 pub(crate) enum QOI_CHUNK {
     OP_RGB(OP_RGB),
     OP_RGBA(OP_RGBA),
     OP_INDEX(OP_INDEX),
     OP_DIFF(OP_DIFF),
     OP_LUMA(OP_LUMA),
-    OP_RUN(OP_RUN)
+    OP_RUN(OP_RUN),
+}
+
+impl QOI_CHUNK {
+    pub fn encode<W: Write>(self, writer: &mut W) -> std::io::Result<()> {
+        match self {
+            QOI_CHUNK::OP_RGB(rgb) => rgb.encode(writer),
+            QOI_CHUNK::OP_RGBA(rgba) => rgba.encode(writer),
+            QOI_CHUNK::OP_INDEX(index) => index.encode(writer),
+            QOI_CHUNK::OP_DIFF(diff) => diff.encode(writer),
+            QOI_CHUNK::OP_LUMA(luma) => luma.encode(writer),
+            QOI_CHUNK::OP_RUN(run) => run.encode(writer),
+        }
+    }
+}
+
+trait ChunkEncode<const N: usize> {
+    fn encode<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let bytes = self.to_bytes();
+        writer.write_all(&bytes)
+    }
+
+    fn to_bytes(&self) -> [u8; N];
 }
 
 pub(crate) struct OP_RGB {
@@ -18,20 +41,21 @@ pub(crate) struct OP_RGB {
 
 impl OP_RGB {
     const FLAG: u8 = 0b1111_1110;
-    const SIZE: u8 = 4;
+    const SIZE: usize = 4;
+
+    pub fn new(r: u8, g: u8, b: u8) -> OP_RGB {
+        OP_RGB { r, g, b }
+    }
 
     fn matches(byte: u8) -> bool {
         byte == Self::FLAG
     }
+}
 
-    fn encode(self) -> [u8; Self::SIZE as usize] {
-        [
-            Self::FLAG,
-            self.r,
-            self.g,
-            self.b,
-        ]
-    }    
+impl ChunkEncode<{Self::SIZE}> for OP_RGB {
+    fn to_bytes(&self) -> [u8; Self::SIZE] {
+        [Self::FLAG, self.r, self.g, self.b]
+    }
 }
 
 pub(crate) struct OP_RGBA {
@@ -43,36 +67,34 @@ pub(crate) struct OP_RGBA {
 
 impl OP_RGBA {
     const FLAG: u8 = 0b1111_1111;
-    const SIZE: u8 = 5;
+    const SIZE: usize = 5;
 
     fn matches(byte: u8) -> bool {
         byte == Self::FLAG
     }
+}
 
-    fn encode(self) -> [u8; Self::SIZE as usize] {
-        [
-            Self::FLAG,
-            self.r,
-            self.g,
-            self.b,
-            self.a
-        ]
+impl ChunkEncode<{Self::SIZE}> for OP_RGBA {
+    fn to_bytes(&self) -> [u8; Self::SIZE] {
+        [Self::FLAG, self.r, self.g, self.b, self.a]
     }
 }
 
 pub(crate) struct OP_INDEX {
-    index: u8,   
+    index: u8,
 }
 
 impl OP_INDEX {
     const FLAG: u8 = 0b00;
-    const SIZE: u8 = 1;
+    const SIZE: usize = 1;
 
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
+}
 
-    fn encode(self) -> [u8; Self::SIZE as usize] {
+impl ChunkEncode<{Self::SIZE}> for OP_INDEX {
+    fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.index]
     }
 }
@@ -85,13 +107,15 @@ pub(crate) struct OP_DIFF {
 
 impl OP_DIFF {
     const FLAG: u8 = 0b01;
-    const SIZE: u8 = 1;
+    const SIZE: usize = 1;
 
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
+}
 
-    fn encode(self) -> [u8; Self::SIZE as usize] {
+impl ChunkEncode<{Self::SIZE}> for OP_DIFF {
+    fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.dr << 4 | self.dg << 2 | self.db]
     }
 }
@@ -104,32 +128,37 @@ pub(crate) struct OP_LUMA {
 
 impl OP_LUMA {
     const FLAG: u8 = 0b10;
-    const SIZE: u8 = 2;
+    const SIZE: usize = 2;
 
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
+}
 
-    fn encode(self) -> [u8; Self::SIZE as usize] {
-        [Self::FLAG << 6 | self.diff_green, (self.dr_dg << 4) | self.db_dg]
+impl ChunkEncode<{Self::SIZE}> for OP_LUMA {
+    fn to_bytes(&self) -> [u8; Self::SIZE] {
+        [
+            Self::FLAG << 6 | self.diff_green,
+            (self.dr_dg << 4) | self.db_dg,
+        ]
     }
 }
 
 pub(crate) struct OP_RUN {
-    run: u8
+    run: u8,
 }
 
 impl OP_RUN {
     const FLAG: u8 = 0b11;
-    const SIZE: u8 = 1;
-    
+    const SIZE: usize = 1;
+
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
+}
 
-    fn encode(self) -> [u8; Self::SIZE as usize] {
+impl ChunkEncode<{Self::SIZE}> for OP_RUN {
+    fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.run]
     }
 }
-
-
