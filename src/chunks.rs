@@ -2,29 +2,7 @@
 
 use std::io::Write;
 
-pub(crate) enum QOI_CHUNK {
-    OP_RGB(OP_RGB),
-    OP_RGBA(OP_RGBA),
-    OP_INDEX(OP_INDEX),
-    OP_DIFF(OP_DIFF),
-    OP_LUMA(OP_LUMA),
-    OP_RUN(OP_RUN),
-}
-
-impl QOI_CHUNK {
-    pub fn encode<W: Write>(self, writer: &mut W) -> std::io::Result<()> {
-        match self {
-            QOI_CHUNK::OP_RGB(rgb) => rgb.encode(writer),
-            QOI_CHUNK::OP_RGBA(rgba) => rgba.encode(writer),
-            QOI_CHUNK::OP_INDEX(index) => index.encode(writer),
-            QOI_CHUNK::OP_DIFF(diff) => diff.encode(writer),
-            QOI_CHUNK::OP_LUMA(luma) => luma.encode(writer),
-            QOI_CHUNK::OP_RUN(run) => run.encode(writer),
-        }
-    }
-}
-
-trait ChunkEncode<const N: usize> {
+pub(crate) trait QOI_CHUNK<const N: usize> {
     fn encode<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         let bytes = self.to_bytes();
         writer.write_all(&bytes)
@@ -52,7 +30,7 @@ impl OP_RGB {
     }
 }
 
-impl ChunkEncode<{Self::SIZE}> for OP_RGB {
+impl QOI_CHUNK<{Self::SIZE}> for OP_RGB {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG, self.r, self.g, self.b]
     }
@@ -74,7 +52,7 @@ impl OP_RGBA {
     }
 }
 
-impl ChunkEncode<{Self::SIZE}> for OP_RGBA {
+impl QOI_CHUNK<{Self::SIZE}> for OP_RGBA {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG, self.r, self.g, self.b, self.a]
     }
@@ -93,7 +71,7 @@ impl OP_INDEX {
     }
 }
 
-impl ChunkEncode<{Self::SIZE}> for OP_INDEX {
+impl QOI_CHUNK<{Self::SIZE}> for OP_INDEX {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.index]
     }
@@ -114,7 +92,7 @@ impl OP_DIFF {
     }
 }
 
-impl ChunkEncode<{Self::SIZE}> for OP_DIFF {
+impl QOI_CHUNK<{Self::SIZE}> for OP_DIFF {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.dr << 4 | self.dg << 2 | self.db]
     }
@@ -135,7 +113,7 @@ impl OP_LUMA {
     }
 }
 
-impl ChunkEncode<{Self::SIZE}> for OP_LUMA {
+impl QOI_CHUNK<{Self::SIZE}> for OP_LUMA {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [
             Self::FLAG << 6 | self.diff_green,
@@ -157,7 +135,7 @@ impl OP_RUN {
     }
 }
 
-impl ChunkEncode<{Self::SIZE}> for OP_RUN {
+impl QOI_CHUNK<{Self::SIZE}> for OP_RUN {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.run]
     }
