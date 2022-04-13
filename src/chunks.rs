@@ -1,6 +1,9 @@
 #![allow(non_camel_case_types)]
 
 use std::io::Write;
+use std::num::Wrapping;
+
+use crate::util::Pixel;
 
 pub(crate) trait QOI_CHUNK<const N: usize> {
     fn encode<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -21,8 +24,12 @@ impl OP_RGB {
     const FLAG: u8 = 0b1111_1110;
     const SIZE: usize = 4;
 
-    pub fn new(r: u8, g: u8, b: u8) -> OP_RGB {
-        OP_RGB { r, g, b }
+    pub fn new(pixel: Pixel) -> OP_RGB {
+        OP_RGB {
+            r: pixel.r(),
+            g: pixel.g(),
+            b: pixel.b(),
+        }
     }
 
     fn matches(byte: u8) -> bool {
@@ -30,7 +37,7 @@ impl OP_RGB {
     }
 }
 
-impl QOI_CHUNK<{Self::SIZE}> for OP_RGB {
+impl QOI_CHUNK<{ Self::SIZE }> for OP_RGB {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG, self.r, self.g, self.b]
     }
@@ -47,12 +54,21 @@ impl OP_RGBA {
     const FLAG: u8 = 0b1111_1111;
     const SIZE: usize = 5;
 
+    pub fn new(pixel: Pixel) -> OP_RGBA {
+        OP_RGBA {
+            r: pixel.r(),
+            g: pixel.g(),
+            b: pixel.b(),
+            a: pixel.a(),
+        }
+    }
+
     fn matches(byte: u8) -> bool {
         byte == Self::FLAG
     }
 }
 
-impl QOI_CHUNK<{Self::SIZE}> for OP_RGBA {
+impl QOI_CHUNK<{ Self::SIZE }> for OP_RGBA {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG, self.r, self.g, self.b, self.a]
     }
@@ -66,12 +82,16 @@ impl OP_INDEX {
     const FLAG: u8 = 0b00;
     const SIZE: usize = 1;
 
+    pub fn new(index: u8) -> OP_INDEX {
+        OP_INDEX { index }
+    }
+
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
 }
 
-impl QOI_CHUNK<{Self::SIZE}> for OP_INDEX {
+impl QOI_CHUNK<{ Self::SIZE }> for OP_INDEX {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.index]
     }
@@ -87,19 +107,27 @@ impl OP_DIFF {
     const FLAG: u8 = 0b01;
     const SIZE: usize = 1;
 
+    pub fn new(prev: Pixel, curr: Pixel) -> OP_DIFF {
+        OP_DIFF {
+            dr: biased_sub(prev.r(), curr.r(), 2),
+            dg: biased_sub(prev.g(), curr.g(), 2),
+            db: biased_sub(prev.b(), curr.b(), 2),
+        }
+    }
+
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
 }
 
-impl QOI_CHUNK<{Self::SIZE}> for OP_DIFF {
+impl QOI_CHUNK<{ Self::SIZE }> for OP_DIFF {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.dr << 4 | self.dg << 2 | self.db]
     }
 }
 
 pub(crate) struct OP_LUMA {
-    diff_green: u8,
+    dg: u8,
     dr_dg: u8,
     db_dg: u8,
 }
@@ -108,15 +136,26 @@ impl OP_LUMA {
     const FLAG: u8 = 0b10;
     const SIZE: usize = 2;
 
+    pub fn new(prev: Pixel, curr: Pixel) -> OP_LUMA {
+        let dr = biased_sub(prev.r(), curr.r(), 32);
+        let dg = biased_sub(prev.g(), curr.g(), 32);
+        let db = biased_sub(prev.b(), curr.b(), 32);
+        OP_LUMA {
+            dg,
+            dr_dg: biased_sub(dr, dg, 8),
+            db_dg: biased_sub(db, dg, 8),
+        }
+    }
+
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
 }
 
-impl QOI_CHUNK<{Self::SIZE}> for OP_LUMA {
+impl QOI_CHUNK<{ Self::SIZE }> for OP_LUMA {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [
-            Self::FLAG << 6 | self.diff_green,
+            Self::FLAG << 6 | self.dg,
             (self.dr_dg << 4) | self.db_dg,
         ]
     }
@@ -130,13 +169,21 @@ impl OP_RUN {
     const FLAG: u8 = 0b11;
     const SIZE: usize = 1;
 
+    pub fn new(run: u8) -> OP_RUN {
+        OP_RUN { run }
+    }
+
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
 }
 
-impl QOI_CHUNK<{Self::SIZE}> for OP_RUN {
+impl QOI_CHUNK<{ Self::SIZE }> for OP_RUN {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.run]
     }
+}
+
+fn biased_sub(a: u8, b: u8, bias: u8) -> u8 {
+    (Wrapping(a as i16 - b as i16).0 + bias as i16) as u8
 }
