@@ -1,5 +1,6 @@
 pub mod encoder;
 mod chunks;
+mod util;
 
 use image::ImageEncoder;
 
@@ -7,12 +8,12 @@ use image::ImageEncoder;
 mod tests {
 
     use std::fs::File;
-    use std::io::{BufWriter, Write};
+    use std::io::BufWriter;
 
     use image::io::Reader as ImageReader;
     use image::{GenericImageView, ImageEncoder};
 
-    use crate::encoder::QoiEncoder;
+    use crate::encoder::QoiEncoder;    
 
     #[test]
     fn test_encode() {

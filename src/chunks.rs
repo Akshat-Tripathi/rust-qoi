@@ -107,11 +107,15 @@ impl OP_DIFF {
     const FLAG: u8 = 0b01;
     const SIZE: usize = 1;
 
-    pub fn new(prev: Pixel, curr: Pixel) -> OP_DIFF {
-        OP_DIFF {
-            dr: biased_sub(prev.r(), curr.r(), 2),
-            dg: biased_sub(prev.g(), curr.g(), 2),
-            db: biased_sub(prev.b(), curr.b(), 2),
+    pub fn try_new(prev: Pixel, curr: Pixel) -> Option<OP_DIFF> {
+        let dr = biased_sub(prev.r(), curr.r(), 2);
+        let dg = biased_sub(prev.g(), curr.g(), 2);
+        let db = biased_sub(prev.b(), curr.b(), 2);
+        
+        if dr < 4 && dg < 4 && db < 4 {
+            Some(OP_DIFF { dr, dg, db })
+        } else {
+            None
         }
     }
 
@@ -136,14 +140,18 @@ impl OP_LUMA {
     const FLAG: u8 = 0b10;
     const SIZE: usize = 2;
 
-    pub fn new(prev: Pixel, curr: Pixel) -> OP_LUMA {
+    pub fn try_new(prev: Pixel, curr: Pixel) -> Option<OP_LUMA> {
         let dr = biased_sub(prev.r(), curr.r(), 32);
         let dg = biased_sub(prev.g(), curr.g(), 32);
         let db = biased_sub(prev.b(), curr.b(), 32);
-        OP_LUMA {
-            dg,
-            dr_dg: biased_sub(dr, dg, 8),
-            db_dg: biased_sub(db, dg, 8),
+
+        let dr_dg = biased_sub(dr, dg, 8);
+        let db_dg = biased_sub(db, dg, 8);
+
+        if dg < 64 && dr_dg < 16 && db_dg < 16 {
+            Some(OP_LUMA { dg, dr_dg, db_dg })
+        } else {
+            None
         }
     }
 
@@ -154,10 +162,7 @@ impl OP_LUMA {
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_LUMA {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
-        [
-            Self::FLAG << 6 | self.dg,
-            (self.dr_dg << 4) | self.db_dg,
-        ]
+        [Self::FLAG << 6 | self.dg, (self.dr_dg << 4) | self.db_dg]
     }
 }
 
@@ -170,7 +175,7 @@ impl OP_RUN {
     const SIZE: usize = 1;
 
     pub fn new(run: u8) -> OP_RUN {
-        OP_RUN { run }
+        OP_RUN { run: run - 1 } //Store with a bias of 1
     }
 
     fn matches(byte: u8) -> bool {
