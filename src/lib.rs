@@ -1,4 +1,5 @@
 pub mod encoder;
+mod chunks;
 
 use image::ImageEncoder;
 
