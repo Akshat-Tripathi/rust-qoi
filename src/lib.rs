@@ -45,21 +45,33 @@ mod tests {
         fn test_rle_rgb() {
             //TODO Fuzz/Prop test this with any length less than 63 and any pixel in range [2..253]
             let img: Image<4> = [(100, 100, 0), (100, 100, 0), (100, 100, 0), (100, 100, 0)];
-            let stripped = encode_rgb_image(img);
+            let pixel_buf = encode_rgb_image(img);
             //254 is OP_RGB and the weird | thing is OP_RUN
-            assert!(stripped == [254, 100, 100, 0, 0b1100_0000 | (3 - 1)])
+            assert!(pixel_buf == [254, 100, 100, 0, 0b1100_0000 | (3 - 1)])
         }
 
         #[test]
         fn test_only_pixels_rgb() {
+            //TODO Fuzz/Prop test this with any reasonable length and each pixel is 3 apart from the previous one
             let img: Image<4> = [(100, 100, 0), (150, 100, 0), (100, 150, 0), (150, 150, 0)];
-            let stripped = encode_rgb_image(img);
+            let pixel_buf = encode_rgb_image(img);
             //254 is OP_RGB
             assert!(
-                stripped
+                pixel_buf
                     == [254, 100, 100, 0, 254, 150, 100, 0, 254, 100, 150, 0, 254, 150, 150, 0]
             )
         }
+
+        #[test]
+        fn test_indexing() {
+            //TODO Fuzz/Prop test this with any length with repeating pixels
+            let img: Image<4> = [(100, 100, 0), (150, 100, 0), (100, 100, 0), (150, 100, 0)];
+            let pixel_buf = encode_rgb_image(img);
+            //254 is OP_RGB, 0 and 1 are the indices
+            assert!(pixel_buf == [254, 100, 100, 0, 254, 150, 100, 0, 21, 43])
+        }
+
+
 
         #[test]
         fn test_images() {
