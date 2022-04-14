@@ -40,8 +40,8 @@ impl<W: Write> QoiEncoder<W> {
         let mut previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE] =
             [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE];
 
-        let mut last_pixel = Pixel::new(0, 0, 0, 255);
-        let mut run_length = 1;
+        let mut last_pixel;
+        let mut run_length = 0;
 
         //Just for easy bookkeeping
         let mut pixel = Pixel::new(0, 0, 0, 255);
@@ -58,7 +58,7 @@ impl<W: Write> QoiEncoder<W> {
             if pixel == last_pixel && run_length < MAX_RUN_LENGTH {
                 run_length += 1;
                 continue;
-            } else if run_length > 1 {
+            } else if run_length > 0 {
                 OP_RUN::new(run_length)
                     .encode(&mut self.w)
                     .map_err(|e| ImageError::IoError(e))?;
@@ -75,7 +75,7 @@ impl<W: Write> QoiEncoder<W> {
                 continue;
             }
 
-            //3. Pixel diff > -3 but < 2 -> small diff
+            // 3. Pixel diff > -3 but < 2 -> small diff
             if let Some(op_diff) = OP_DIFF::try_new(last_pixel, pixel) {
                 op_diff.encode(&mut self.w)
                     .map_err(|e| ImageError::IoError(e))?;
@@ -95,12 +95,18 @@ impl<W: Write> QoiEncoder<W> {
                 .map_err(|e| ImageError::IoError(e))?;
         }
 
+        if run_length > 0 {
+            OP_RUN::new(run_length)
+                .encode(&mut self.w)
+                .map_err(|e| ImageError::IoError(e))?;
+        }
+
         self.w
             .write(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
             .map_err(|e| ImageError::IoError(e))?;
         Ok(())
     }
-    
+
     fn encode_rgba(mut self, buf: &[u8], width: u32, height: u32) -> image::ImageResult<()> {
         //TODO: check if colour_space is actually 0
         self.write_header(width, height, RGBA_CHANNELS, 0)
