@@ -1,7 +1,8 @@
 #![allow(non_camel_case_types)]
 
 use std::fmt::Debug;
-use std::io::Write;
+use std::io::{Read, Write};
+use std::iter::Peekable;
 use std::num::Wrapping;
 
 use crate::util::Pixel;
@@ -18,7 +19,23 @@ where
         writer.write_all(&bytes)
     }
 
+    fn try_decode(&self, mut buf: Peekable<impl Iterator<Item = u8>>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let flag = *buf.peek().unwrap();
+        if Self::matches(flag) {
+            let bytes = buf.take(N).collect::<Vec<u8>>();
+            Some(Self::from_bytes(&bytes))
+        } else {
+            None
+        }
+    }
+
+    fn matches(byte: u8) -> bool;
+
     fn to_bytes(&self) -> [u8; N];
+    fn from_bytes(buffer: &[u8]) -> Self;
 }
 
 #[derive(Debug)]
@@ -39,15 +56,23 @@ impl OP_RGB {
             b: pixel.b(),
         }
     }
-
-    fn matches(byte: u8) -> bool {
-        byte == Self::FLAG
-    }
 }
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_RGB {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG, self.r, self.g, self.b]
+    }
+
+    fn matches(byte: u8) -> bool {
+        byte == Self::FLAG
+    }
+
+    fn from_bytes(buffer: &[u8]) -> Self {
+        OP_RGB {
+            r: buffer[1],
+            g: buffer[2],
+            b: buffer[3],
+        }
     }
 }
 
@@ -71,15 +96,24 @@ impl OP_RGBA {
             a: pixel.a(),
         }
     }
-
-    fn matches(byte: u8) -> bool {
-        byte == Self::FLAG
-    }
 }
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_RGBA {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG, self.r, self.g, self.b, self.a]
+    }
+
+    fn matches(byte: u8) -> bool {
+        byte == Self::FLAG
+    }
+
+    fn from_bytes(buffer: &[u8]) -> Self {
+        OP_RGBA {
+            r: buffer[1],
+            g: buffer[2],
+            b: buffer[3],
+            a: buffer[4],
+        }
     }
 }
 
@@ -95,15 +129,21 @@ impl OP_INDEX {
     pub fn new(index: u8) -> OP_INDEX {
         OP_INDEX { index }
     }
-
-    fn matches(byte: u8) -> bool {
-        byte >> 6 == Self::FLAG
-    }
 }
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_INDEX {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.index]
+    }
+
+    fn matches(byte: u8) -> bool {
+        byte >> 6 == Self::FLAG
+    }
+
+    fn from_bytes(buffer: &[u8]) -> Self {
+        OP_INDEX {
+            index: buffer[0] & 0b011_1111,
+        }
     }
 }
 
@@ -129,15 +169,23 @@ impl OP_DIFF {
             None
         }
     }
-
-    fn matches(byte: u8) -> bool {
-        byte >> 6 == Self::FLAG
-    }
 }
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_DIFF {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.dr << 4 | self.dg << 2 | self.db]
+    }
+
+    fn matches(byte: u8) -> bool {
+        byte >> 6 == Self::FLAG
+    }
+
+    fn from_bytes(buffer: &[u8]) -> Self {
+        OP_DIFF {
+            dr: buffer[0] & 0b0011_0000 >> 4,
+            dg: buffer[0] & 0b0000_1100 >> 2,
+            db: buffer[0] & 0b0000_0011,
+        }
     }
 }
 
@@ -166,15 +214,23 @@ impl OP_LUMA {
             None
         }
     }
-
-    fn matches(byte: u8) -> bool {
-        byte >> 6 == Self::FLAG
-    }
 }
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_LUMA {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.dg, (self.dr_dg << 4) | self.db_dg]
+    }
+
+    fn matches(byte: u8) -> bool {
+        byte >> 6 == Self::FLAG
+    }
+
+    fn from_bytes(buffer: &[u8]) -> Self {
+        OP_LUMA {
+            dg: buffer[0] & 0b0011_1111,
+            dr_dg: buffer[1] >> 4,
+            db_dg: buffer[1] & 0b0000_1111,
+        }
     }
 }
 
@@ -190,15 +246,21 @@ impl OP_RUN {
     pub fn new(run: u8) -> OP_RUN {
         OP_RUN { run }
     }
-
-    fn matches(byte: u8) -> bool {
-        byte >> 6 == Self::FLAG
-    }
 }
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_RUN {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | (self.run - 1)] //Store with bias -1
+    }
+
+    fn matches(byte: u8) -> bool {
+        byte >> 6 == Self::FLAG
+    }
+
+    fn from_bytes(buffer: &[u8]) -> Self {
+        OP_RUN {
+            run: (buffer[0] & 0b0011_1111) + 1, //Restore with bias +1
+        }
     }
 }
 
