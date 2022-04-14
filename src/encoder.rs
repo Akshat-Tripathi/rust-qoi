@@ -60,14 +60,15 @@ impl<W: Write> QoiEncoder<W> {
             if pixel == last_pixel && run_length < MAX_RUN_LENGTH {
                 run_length += 1;
                 continue;
-            } else if run_length > 1 {
+            } else if run_length > 0 {
                 OP_RUN::new(run_length)
                     .encode(&mut self.w)
                     .map_err(|e| ImageError::IoError(e))?;
-                run_length = 1;
                 if pixel == last_pixel {
+                    run_length = 1;
                     continue;
                 }
+                run_length = 0;
             }
 
             //2. Pixel seen before -> index
