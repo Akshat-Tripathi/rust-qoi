@@ -25,11 +25,9 @@ mod tests {
             &buf[14..(buf.len() - 8)] //14 byte header and 8 byte footer
         }
 
-        #[test]
-        fn test_rle() {
-            //TODO Fuzz/Prop test this with any length less than 63 and any pixel in range [2..253]
-            let img: [(u8, u8, u8); 4] =
-                [(100, 100, 0), (100, 100, 0), (100, 100, 0), (100, 100, 0)];
+        type Image<const N: usize> = [(u8, u8, u8); N];
+
+        fn encode_rgb_image<const N: usize>(img: Image<N>) -> Vec<u8> {
             let bytes = img
                 .iter()
                 .flat_map(|&(r, g, b)| vec![r, g, b])
@@ -40,9 +38,27 @@ mod tests {
                 .write_image(bytes.as_bytes(), 2, 2, image::ColorType::Rgb8)
                 .unwrap();
 
-            let stripped = strip(out.buffer());
+            Vec::from(strip(out.buffer()))
+        }
+
+        #[test]
+        fn test_rle_rgb() {
+            //TODO Fuzz/Prop test this with any length less than 63 and any pixel in range [2..253]
+            let img: Image<4> = [(100, 100, 0), (100, 100, 0), (100, 100, 0), (100, 100, 0)];
+            let stripped = encode_rgb_image(img);
             //254 is OP_RGB and the weird | thing is OP_RUN
             assert!(stripped == [254, 100, 100, 0, 0b1100_0000 | (3 - 1)])
+        }
+
+        #[test]
+        fn test_only_pixels_rgb() {
+            let img: Image<4> = [(100, 100, 0), (150, 100, 0), (100, 150, 0), (150, 150, 0)];
+            let stripped = encode_rgb_image(img);
+            //254 is OP_RGB
+            assert!(
+                stripped
+                    == [254, 100, 100, 0, 254, 150, 100, 0, 254, 100, 150, 0, 254, 150, 150, 0]
+            )
         }
 
         #[test]
