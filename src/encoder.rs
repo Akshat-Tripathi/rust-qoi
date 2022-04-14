@@ -10,7 +10,7 @@ use crate::util::Pixel;
 const RGB_CHANNELS: u8 = 3;
 const RGBA_CHANNELS: u8 = 4;
 const SEEN_PIXEL_ARRAY_SIZE: usize = 64;
-const MAX_RUN_LENGTH: u8 = 63;
+const MAX_RUN_LENGTH: u8 = 62;
 
 impl Pixel {
     fn hash(&self) -> usize {
@@ -47,7 +47,9 @@ impl<W: Write> QoiEncoder<W> {
         let mut pixel = Pixel::new(0, 0, 0, 255);
         let mut hash_idx = 0;
 
+        let mut n_pixels = 0;
         for chunk in buf.chunks(RGB_CHANNELS.into()) {
+            n_pixels += 1;
             last_pixel = pixel;
             previously_seen[hash_idx] = pixel;
 
@@ -58,12 +60,14 @@ impl<W: Write> QoiEncoder<W> {
             if pixel == last_pixel && run_length < MAX_RUN_LENGTH {
                 run_length += 1;
                 continue;
-            } else if run_length > 0 {
+            } else if run_length > 1 {
                 OP_RUN::new(run_length)
                     .encode(&mut self.w)
                     .map_err(|e| ImageError::IoError(e))?;
-                run_length = 0;
-                continue;
+                run_length = 1;
+                if pixel == last_pixel {
+                    continue;
+                }
             }
 
             //2. Pixel seen before -> index
@@ -95,7 +99,7 @@ impl<W: Write> QoiEncoder<W> {
                 .map_err(|e| ImageError::IoError(e))?;
         }
 
-        if run_length > 0 {
+        if run_length > 1 {
             OP_RUN::new(run_length)
                 .encode(&mut self.w)
                 .map_err(|e| ImageError::IoError(e))?;
