@@ -1,12 +1,19 @@
 #![allow(non_camel_case_types)]
 
+use std::fmt::Debug;
 use std::io::Write;
 use std::num::Wrapping;
 
 use crate::util::Pixel;
 
-pub(crate) trait QOI_CHUNK<const N: usize> {
+pub(crate) trait QOI_CHUNK<const N: usize>
+where
+    Self: Debug,
+{
     fn encode<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        #[cfg(test)]
+        println!("{:?}", self);
+
         let bytes = self.to_bytes();
         writer.write_all(&bytes)
     }
@@ -14,6 +21,7 @@ pub(crate) trait QOI_CHUNK<const N: usize> {
     fn to_bytes(&self) -> [u8; N];
 }
 
+#[derive(Debug)]
 pub(crate) struct OP_RGB {
     r: u8,
     g: u8,
@@ -43,6 +51,7 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_RGB {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct OP_RGBA {
     r: u8,
     g: u8,
@@ -74,6 +83,7 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_RGBA {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct OP_INDEX {
     index: u8,
 }
@@ -97,6 +107,7 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_INDEX {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct OP_DIFF {
     dr: u8,
     dg: u8,
@@ -111,7 +122,7 @@ impl OP_DIFF {
         let dr = biased_sub(prev.r(), curr.r(), 2);
         let dg = biased_sub(prev.g(), curr.g(), 2);
         let db = biased_sub(prev.b(), curr.b(), 2);
-        
+
         if dr < 4 && dg < 4 && db < 4 {
             Some(OP_DIFF { dr, dg, db })
         } else {
@@ -130,6 +141,7 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_DIFF {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct OP_LUMA {
     dg: u8,
     dr_dg: u8,
@@ -166,6 +178,7 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_LUMA {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct OP_RUN {
     run: u8,
 }
@@ -175,7 +188,7 @@ impl OP_RUN {
     const SIZE: usize = 1;
 
     pub fn new(run: u8) -> OP_RUN {
-        OP_RUN { run: run - 1 } //Store with a bias of 1
+        OP_RUN { run }
     }
 
     fn matches(byte: u8) -> bool {
@@ -185,7 +198,7 @@ impl OP_RUN {
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_RUN {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
-        [Self::FLAG << 6 | self.run]
+        [Self::FLAG << 6 | (self.run - 1)] //Store with bias -1
     }
 }
 
