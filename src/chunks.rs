@@ -162,6 +162,9 @@ impl OP_DIFF {
     const SIZE: usize = 1;
 
     pub fn try_new(prev: Pixel, curr: Pixel) -> Option<OP_DIFF> {
+        if prev.a() != curr.a() {
+            return None;
+        }
         let dr = biased_sub(curr.r(), prev.r(), 2);
         let dg = biased_sub(curr.g(), prev.g(), 2);
         let db = biased_sub(curr.b(), prev.b(), 2);
@@ -204,6 +207,9 @@ impl OP_LUMA {
     const SIZE: usize = 2;
 
     pub fn try_new(prev: Pixel, curr: Pixel) -> Option<OP_LUMA> {
+        if prev.a() != curr.a() {
+            return None;
+        }
         let dr = biased_sub(curr.r(), prev.r(), 32);
         let dg = biased_sub(curr.g(), prev.g(), 32);
         let db = biased_sub(curr.b(), prev.b(), 32);
