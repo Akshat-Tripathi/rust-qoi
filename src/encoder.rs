@@ -93,9 +93,15 @@ impl<W: Write> QoiEncoder<W> {
             }
             
             //5. Save pixel normally
-            OP_RGB::new(pixel)
-                .encode(&mut self.w)
-                .map_err(|e| ImageError::IoError(e))?;
+            if pixel.a() == last_pixel.a() {
+                OP_RGB::new(pixel)
+                    .encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+            } else {
+                OP_RGBA::new(pixel)
+                    .encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+            }
         }
 
         if run_length > 1 {
@@ -123,7 +129,7 @@ impl<W: Write> QoiEncoder<W> {
 
         //Just for easy bookkeeping
         let mut pixel = Pixel::new(0, 0, 0, 255);
-        let mut hash_idx = 0;
+        let mut hash_idx;
 
         for chunk in buf.chunks(RGBA_CHANNELS.into()) {
             last_pixel = pixel;
@@ -155,6 +161,10 @@ impl<W: Write> QoiEncoder<W> {
                 continue;
             }
 
+            //This is the only safe place for this.
+            //If we go into any of the above branches, it is guaranteed that the pixel would already
+            //be in the array, so we can skip it.
+            //If this was any further down, then continues would skip adding some pixels
             previously_seen[hash_idx] = pixel;
 
             // 3. Pixel diff > -3 but < 2 -> small diff
@@ -172,9 +182,15 @@ impl<W: Write> QoiEncoder<W> {
             }
             
             //5. Save pixel normally
-            OP_RGBA::new(pixel)
-                .encode(&mut self.w)
-                .map_err(|e| ImageError::IoError(e))?;
+            if pixel.a() == last_pixel.a() {
+                OP_RGB::new(pixel)
+                    .encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+            } else {
+                OP_RGBA::new(pixel)
+                    .encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+            }
         }
 
         if run_length > 1 {
