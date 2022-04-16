@@ -18,3 +18,4 @@ Cargo.lock
 #Cargo.lock
 
 /qoi_test_images
+/.vscode
