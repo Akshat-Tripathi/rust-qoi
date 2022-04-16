@@ -47,9 +47,7 @@ impl<W: Write> QoiEncoder<W> {
         let mut pixel = Pixel::new(0, 0, 0, 255);
         let mut hash_idx = 0;
 
-        let mut n_pixels = 0;
         for chunk in buf.chunks(RGB_CHANNELS.into()) {
-            n_pixels += 1;
             last_pixel = pixel;
             previously_seen[hash_idx] = pixel;
 
@@ -115,6 +113,78 @@ impl<W: Write> QoiEncoder<W> {
     fn encode_rgba(mut self, buf: &[u8], width: u32, height: u32) -> image::ImageResult<()> {
         //TODO: check if colour_space is actually 0
         self.write_header(width, height, RGBA_CHANNELS, 0)
+            .map_err(|e| ImageError::IoError(e))?;
+
+        let mut previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE] =
+            [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE];
+
+        let mut last_pixel;
+        let mut run_length = 0;
+
+        //Just for easy bookkeeping
+        let mut pixel = Pixel::new(0, 0, 0, 255);
+        let mut hash_idx = 0;
+
+        for chunk in buf.chunks(RGBA_CHANNELS.into()) {
+            last_pixel = pixel;
+
+            pixel = Pixel::new(chunk[0], chunk[1], chunk[2], chunk[3]);
+            hash_idx = pixel.hash();
+
+            //1. Pixel == last pixel -> run length
+            if pixel == last_pixel && run_length < MAX_RUN_LENGTH {
+                run_length += 1;
+                continue;
+            } else if run_length > 0 {
+                OP_RUN::new(run_length)
+                    .encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+                if pixel == last_pixel {
+                    run_length = 1;
+                    continue;
+                }
+                run_length = 0;
+            }
+
+            //2. Pixel seen before -> index
+            let looked_up_pixel = previously_seen[hash_idx];
+            if looked_up_pixel == pixel {
+                OP_INDEX::new(hash_idx as u8)
+                    .encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+                continue;
+            }
+
+            previously_seen[hash_idx] = pixel;
+
+            // 3. Pixel diff > -3 but < 2 -> small diff
+            if let Some(op_diff) = OP_DIFF::try_new(last_pixel, pixel) {
+                op_diff.encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+                continue;
+            }
+            
+            //4. Green pixel diff in -32..31 -> big diff
+            if let Some(op_luma) = OP_LUMA::try_new(last_pixel, pixel) {
+                op_luma.encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+                continue;
+            }
+            
+            //5. Save pixel normally
+            OP_RGBA::new(pixel)
+                .encode(&mut self.w)
+                .map_err(|e| ImageError::IoError(e))?;
+        }
+
+        if run_length > 1 {
+            OP_RUN::new(run_length)
+                .encode(&mut self.w)
+                .map_err(|e| ImageError::IoError(e))?;
+        }
+
+        self.w
+            .write(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
             .map_err(|e| ImageError::IoError(e))?;
         Ok(())
     }
