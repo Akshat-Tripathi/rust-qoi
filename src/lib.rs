@@ -71,7 +71,22 @@ mod tests {
             assert!(pixel_buf == [254, 100, 100, 0, 254, 150, 100, 0, 21, 43])
         }
 
+        #[test]
+        fn scratch() {
+            let mut img = ImageReader::open("qoi_test_images/kodim10.png")
+                .unwrap()
+                .decode()
+                .unwrap();
 
+            // let img = img.crop(0, 0, img.width(), 3);
+
+            let mut out = BufWriter::new(Vec::new());
+            QoiEncoder::new(&mut out)
+                .write_image(img.as_bytes(), 2, 2, image::ColorType::Rgb8)
+                .unwrap();
+            // println!("{:?}", strip(out.buffer()));
+            // None.unwrap()
+        }
 
         #[test]
         fn test_images() {

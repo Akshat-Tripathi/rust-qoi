@@ -23,7 +23,7 @@ where
     where
         Self: Sized,
     {
-        let flag = *buf.peek().unwrap();
+        let flag = *buf.peek()?;
         if Self::matches(flag) {
             let bytes = buf.take(N).collect::<Vec<u8>>();
             if bytes.len() != N {
