@@ -71,28 +71,23 @@ mod tests {
             assert!(pixel_buf == [254, 100, 100, 0, 254, 150, 100, 0, 21, 43])
         }
 
-        #[test]
-        fn scratch() {
-            let img = ImageReader::open("qoi_test_images/kodim10.png")
-                .unwrap()
-                .decode()
-                .unwrap();
-
-
-            let mut out = BufWriter::new(Vec::new());
-            QoiEncoder::new(&mut out)
-                .write_image(img.as_bytes(), 2, 2, image::ColorType::Rgb8)
-                .unwrap();
+        fn get_pngs() -> Vec<String> {
+            let paths = std::fs::read_dir("./qoi_test_images").unwrap();
+            paths
+                .map(|f| f.unwrap().file_name().into_string().unwrap())
+                .filter(|f| f.ends_with(".png"))
+                .map(|f| f.clone().strip_suffix(".png").unwrap().to_owned())
+                .collect::<Vec<String>>()
         }
 
         #[test]
-        fn test_rgb_images() {
-            for fname in ["kodim10", "kodim23"].iter() {
-                let img = ImageReader::open("qoi_test_images/".to_owned() + fname + ".png")
+        fn test_images() {
+            for fname in get_pngs() {
+                let img = ImageReader::open("qoi_test_images/".to_owned() + &fname + ".png")
                     .unwrap()
                     .decode()
                     .unwrap();
-    
+
                 let mut buf: Vec<u8> = Vec::new();
                 {
                     let fout = &mut BufWriter::new(&mut buf);
@@ -101,29 +96,8 @@ mod tests {
                         .unwrap();
                 }
 
-                let reference = std::fs::read("qoi_test_images/".to_owned() + fname + ".qoi").unwrap();
-
-                assert!(reference == buf);
-            }
-        }
-        
-        #[test]
-        fn test_rgba_images() {
-            for fname in ["dice", "qoi_logo", "testcard_rgba", "testcard", "wikipedia_008"].iter() {
-                let img = ImageReader::open("qoi_test_images/".to_owned() + fname + ".png")
-                    .unwrap()
-                    .decode()
-                    .unwrap();
-    
-                let mut buf: Vec<u8> = Vec::new();
-                {
-                    let fout = &mut BufWriter::new(&mut buf);
-                    QoiEncoder::new(fout)
-                        .write_image(img.as_bytes(), img.width(), img.height(), img.color())
-                        .unwrap();
-                }
-
-                let reference = std::fs::read("qoi_test_images/".to_owned() + fname + ".qoi").unwrap();
+                let reference =
+                    std::fs::read("qoi_test_images/".to_owned() + &fname + ".qoi").unwrap();
 
                 assert!(reference == buf);
             }

@@ -4,7 +4,7 @@ mod util;
 use chunks::{QOI_CHUNK, OP_DIFF, OP_INDEX, OP_RGB, OP_LUMA, OP_RGBA, OP_RUN};
 
 fn main() {
-    let buffer = std::fs::read("./qoi_test_images/kodim10.qoi").unwrap();
+    let buffer = std::fs::read("./qoi_test_images/dice.qoi").unwrap();
 
     let mut peekable = buffer.iter().skip(14).map(|&b| b).peekable();
     loop {
