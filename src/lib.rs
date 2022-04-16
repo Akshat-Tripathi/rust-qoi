@@ -73,7 +73,7 @@ mod tests {
 
         #[test]
         fn scratch() {
-            let mut img = ImageReader::open("qoi_test_images/kodim10.png")
+            let img = ImageReader::open("qoi_test_images/kodim10.png")
                 .unwrap()
                 .decode()
                 .unwrap();
@@ -88,6 +88,28 @@ mod tests {
         #[test]
         fn test_rgb_images() {
             for fname in ["kodim10", "kodim23"].iter() {
+                let img = ImageReader::open("qoi_test_images/".to_owned() + fname + ".png")
+                    .unwrap()
+                    .decode()
+                    .unwrap();
+    
+                let mut buf: Vec<u8> = Vec::new();
+                {
+                    let fout = &mut BufWriter::new(&mut buf);
+                    QoiEncoder::new(fout)
+                        .write_image(img.as_bytes(), img.width(), img.height(), img.color())
+                        .unwrap();
+                }
+
+                let reference = std::fs::read("qoi_test_images/".to_owned() + fname + ".qoi").unwrap();
+
+                assert!(reference == buf);
+            }
+        }
+        
+        #[test]
+        fn test_rgba_images() {
+            for fname in ["dice", "qoi_logo", "testcard_rgba", "testcard", "wikipedia_008"].iter() {
                 let img = ImageReader::open("qoi_test_images/".to_owned() + fname + ".png")
                     .unwrap()
                     .decode()
