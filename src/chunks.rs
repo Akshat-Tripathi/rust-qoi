@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use std::fmt::Debug;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::iter::Peekable;
 use std::num::Wrapping;
 
@@ -19,13 +19,16 @@ where
         writer.write_all(&bytes)
     }
 
-    fn try_decode(&self, mut buf: Peekable<impl Iterator<Item = u8>>) -> Option<Self>
+    fn try_decode(buf: &mut Peekable<impl Iterator<Item = u8>>) -> Option<Self>
     where
         Self: Sized,
     {
         let flag = *buf.peek().unwrap();
         if Self::matches(flag) {
             let bytes = buf.take(N).collect::<Vec<u8>>();
+            if bytes.len() != N {
+                return None
+            }
             Some(Self::from_bytes(&bytes))
         } else {
             None
@@ -159,9 +162,9 @@ impl OP_DIFF {
     const SIZE: usize = 1;
 
     pub fn try_new(prev: Pixel, curr: Pixel) -> Option<OP_DIFF> {
-        let dr = biased_sub(prev.r(), curr.r(), 2);
-        let dg = biased_sub(prev.g(), curr.g(), 2);
-        let db = biased_sub(prev.b(), curr.b(), 2);
+        let dr = biased_sub(curr.r(), prev.r(), 2);
+        let dg = biased_sub(curr.g(), prev.g(), 2);
+        let db = biased_sub(curr.b(), prev.b(), 2);
 
         if dr < 4 && dg < 4 && db < 4 {
             Some(OP_DIFF { dr, dg, db })
@@ -182,8 +185,8 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_DIFF {
 
     fn from_bytes(buffer: &[u8]) -> Self {
         OP_DIFF {
-            dr: buffer[0] & 0b0011_0000 >> 4,
-            dg: buffer[0] & 0b0000_1100 >> 2,
+            dr: (buffer[0] & 0b0011_0000) >> 4,
+            dg: (buffer[0] & 0b0000_1100) >> 2,
             db: buffer[0] & 0b0000_0011,
         }
     }
@@ -201,9 +204,9 @@ impl OP_LUMA {
     const SIZE: usize = 2;
 
     pub fn try_new(prev: Pixel, curr: Pixel) -> Option<OP_LUMA> {
-        let dr = biased_sub(prev.r(), curr.r(), 32);
-        let dg = biased_sub(prev.g(), curr.g(), 32);
-        let db = biased_sub(prev.b(), curr.b(), 32);
+        let dr = biased_sub(curr.r(), prev.r(), 32);
+        let dg = biased_sub(curr.g(), prev.g(), 32);
+        let db = biased_sub(curr.b(), prev.b(), 32);
 
         let dr_dg = biased_sub(dr, dg, 8);
         let db_dg = biased_sub(db, dg, 8);
