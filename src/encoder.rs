@@ -4,7 +4,7 @@ use std::num::Wrapping;
 use image::error::{ImageError, ImageFormatHint, UnsupportedError, UnsupportedErrorKind};
 use image::ImageEncoder;
 
-use crate::chunks::{OP_INDEX, OP_RGB, OP_RGBA, OP_RUN, QOI_CHUNK, OP_DIFF, OP_LUMA};
+use crate::chunks::{OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN, QOI_CHUNK};
 use crate::util::Pixel;
 
 const RGB_CHANNELS: u8 = 3;
@@ -32,93 +32,15 @@ impl<W: Write> QoiEncoder<W> {
         QoiEncoder { w }
     }
 
-    fn encode_rgb(mut self, buf: &[u8], width: u32, height: u32) -> image::ImageResult<()> {
+    fn encode<const CHANNELS: u8>(
+        mut self,
+        buf: &[u8],
+        width: u32,
+        height: u32,
+    ) -> image::ImageResult<()> {
+        let is_rgb = CHANNELS == RGB_CHANNELS;
         //TODO: check if colour_space is actually 0
-        self.write_header(width, height, RGB_CHANNELS, 0)
-            .map_err(|e| ImageError::IoError(e))?;
-
-        let mut previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE] =
-            [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE];
-
-        let mut last_pixel;
-        let mut run_length = 0;
-
-        //Just for easy bookkeeping
-        let mut pixel = Pixel::new(0, 0, 0, 255);
-        let mut hash_idx = 0;
-
-        for chunk in buf.chunks(RGB_CHANNELS.into()) {
-            last_pixel = pixel;
-            previously_seen[hash_idx] = pixel;
-
-            pixel = Pixel::new(chunk[0], chunk[1], chunk[2], 255);
-            hash_idx = pixel.hash();
-
-            //1. Pixel == last pixel -> run length
-            if pixel == last_pixel && run_length < MAX_RUN_LENGTH {
-                run_length += 1;
-                continue;
-            } else if run_length > 0 {
-                OP_RUN::new(run_length)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
-                if pixel == last_pixel {
-                    run_length = 1;
-                    continue;
-                }
-                run_length = 0;
-            }
-
-            //2. Pixel seen before -> index
-            let looked_up_pixel = previously_seen[hash_idx];
-            if looked_up_pixel == pixel {
-                OP_INDEX::new(hash_idx as u8)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
-                continue;
-            }
-
-            // 3. Pixel diff > -3 but < 2 -> small diff
-            if let Some(op_diff) = OP_DIFF::try_new(last_pixel, pixel) {
-                op_diff.encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
-                continue;
-            }
-            
-            //4. Green pixel diff in -32..31 -> big diff
-            if let Some(op_luma) = OP_LUMA::try_new(last_pixel, pixel) {
-                op_luma.encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
-                continue;
-            }
-            
-            //5. Save pixel normally
-            if pixel.a() == last_pixel.a() {
-                OP_RGB::new(pixel)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
-            } else {
-                OP_RGBA::new(pixel)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
-            }
-        }
-
-        if run_length > 1 {
-            OP_RUN::new(run_length)
-                .encode(&mut self.w)
-                .map_err(|e| ImageError::IoError(e))?;
-        }
-
-        self.w
-            .write(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
-            .map_err(|e| ImageError::IoError(e))?;
-        Ok(())
-    }
-
-    fn encode_rgba(mut self, buf: &[u8], width: u32, height: u32) -> image::ImageResult<()> {
-        //TODO: check if colour_space is actually 0
-        self.write_header(width, height, RGBA_CHANNELS, 0)
+        self.write_header(width, height, CHANNELS, 0)
             .map_err(|e| ImageError::IoError(e))?;
 
         let mut previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE] =
@@ -131,10 +53,14 @@ impl<W: Write> QoiEncoder<W> {
         let mut pixel = Pixel::new(0, 0, 0, 255);
         let mut hash_idx;
 
-        for chunk in buf.chunks(RGBA_CHANNELS.into()) {
+        for chunk in buf.chunks(CHANNELS.into()) {
             last_pixel = pixel;
 
-            pixel = Pixel::new(chunk[0], chunk[1], chunk[2], chunk[3]);
+            if is_rgb {
+                pixel = Pixel::new(chunk[0], chunk[1], chunk[2], 255);
+            } else {
+                pixel = Pixel::new(chunk[0], chunk[1], chunk[2], chunk[3]);
+            }
             hash_idx = pixel.hash();
 
             //1. Pixel == last pixel -> run length
@@ -169,20 +95,22 @@ impl<W: Write> QoiEncoder<W> {
 
             // 3. Pixel diff > -3 but < 2 -> small diff
             if let Some(op_diff) = OP_DIFF::try_new(last_pixel, pixel) {
-                op_diff.encode(&mut self.w)
+                op_diff
+                    .encode(&mut self.w)
                     .map_err(|e| ImageError::IoError(e))?;
                 continue;
             }
-            
+
             //4. Green pixel diff in -32..31 -> big diff
             if let Some(op_luma) = OP_LUMA::try_new(last_pixel, pixel) {
-                op_luma.encode(&mut self.w)
+                op_luma
+                    .encode(&mut self.w)
                     .map_err(|e| ImageError::IoError(e))?;
                 continue;
             }
-            
+
             //5. Save pixel normally
-            if pixel.a() == last_pixel.a() {
+            if pixel.a() == last_pixel.a() || is_rgb {
                 OP_RGB::new(pixel)
                     .encode(&mut self.w)
                     .map_err(|e| ImageError::IoError(e))?;
@@ -230,8 +158,8 @@ impl<W: Write> ImageEncoder for QoiEncoder<W> {
         color_type: image::ColorType,
     ) -> image::ImageResult<()> {
         match color_type {
-            image::ColorType::Rgb8 => self.encode_rgb(buf, width, height),
-            image::ColorType::Rgba8 => self.encode_rgba(buf, width, height),
+            image::ColorType::Rgb8 => self.encode::<RGB_CHANNELS>(buf, width, height),
+            image::ColorType::Rgba8 => self.encode::<RGBA_CHANNELS>(buf, width, height),
             _ => Err(ImageError::Unsupported(
                 UnsupportedError::from_format_and_kind(
                     ImageFormatHint::Name("Qoi".to_string()),
