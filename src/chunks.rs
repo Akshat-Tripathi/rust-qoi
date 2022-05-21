@@ -245,7 +245,7 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_LUMA {
 
 #[derive(Debug)]
 pub(crate) struct OP_RUN {
-    run: u8,
+    run_length: u8,
 }
 
 impl OP_RUN {
@@ -253,22 +253,26 @@ impl OP_RUN {
     const SIZE: usize = 1;
 
     pub fn new(run: u8) -> OP_RUN {
-        OP_RUN { run }
+        OP_RUN { run_length: run }
+    }
+
+    #[must_use]
+    pub(crate) fn run_length(&self) -> u8 {
+        self.run_length
     }
 }
 
 impl QOI_CHUNK<{ Self::SIZE }> for OP_RUN {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
-        [Self::FLAG << 6 | (self.run - 1)] //Store with bias -1
+        [Self::FLAG << 6 | (self.run_length - 1)] //Store with bias -1
     }
-
     fn matches(byte: u8) -> bool {
         byte >> 6 == Self::FLAG
     }
 
     fn from_bytes(buffer: &[u8]) -> Self {
         OP_RUN {
-            run: (buffer[0] & 0b0011_1111) + 1, //Restore with bias +1
+            run_length: (buffer[0] & 0b0011_1111) + 1, //Restore with bias +1
         }
     }
 }
