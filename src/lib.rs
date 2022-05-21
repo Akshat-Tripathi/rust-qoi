@@ -1,19 +1,26 @@
 mod chunks;
 pub mod encoder;
 mod util;
-
-use image::ImageEncoder;
+pub mod decoder;
+mod consts;
 
 #[cfg(test)]
 mod tests {
-
-    use std::fs::File;
     use std::io::BufWriter;
 
     use image::io::Reader as ImageReader;
     use image::{GenericImageView, ImageEncoder};
 
     use crate::encoder::QoiEncoder;
+
+    fn get_images(file_ext: &str) -> Vec<String> {
+        let paths = std::fs::read_dir("./qoi_test_images").unwrap();
+        paths
+            .map(|f| f.unwrap().file_name().into_string().unwrap())
+            .filter(|f| f.ends_with(file_ext))
+            .map(|f| f.clone().strip_suffix(file_ext).unwrap().to_owned())
+            .collect::<Vec<String>>()
+    }
 
     #[cfg(test)]
     mod encoding_tests {
@@ -71,18 +78,9 @@ mod tests {
             assert!(pixel_buf == [254, 100, 100, 0, 254, 150, 100, 0, 21, 43])
         }
 
-        fn get_pngs() -> Vec<String> {
-            let paths = std::fs::read_dir("./qoi_test_images").unwrap();
-            paths
-                .map(|f| f.unwrap().file_name().into_string().unwrap())
-                .filter(|f| f.ends_with(".png"))
-                .map(|f| f.clone().strip_suffix(".png").unwrap().to_owned())
-                .collect::<Vec<String>>()
-        }
-
         #[test]
         fn test_images() {
-            for fname in get_pngs() {
+            for fname in get_images(".png") {
                 let img = ImageReader::open("qoi_test_images/".to_owned() + &fname + ".png")
                     .unwrap()
                     .decode()
@@ -104,6 +102,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_decode() {}
+
+    #[cfg(test)]
+    mod decoding_tests {
+        use super::*;
+
+        #[test]
+        fn test_decode() {
+            for fname in get_images(".qoi") {
+                let bytes = std::fs::read("qoi_test_images/".to_owned() + &fname + ".qoi").unwrap();
+                println!("{:?}", bytes)
+            }
+        }
+    }
 }
