@@ -6,11 +6,7 @@ use image::ImageEncoder;
 
 use crate::chunks::{OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN, QOI_CHUNK};
 use crate::util::Pixel;
-
-const RGB_CHANNELS: u8 = 3;
-const RGBA_CHANNELS: u8 = 4;
-const SEEN_PIXEL_ARRAY_SIZE: usize = 64;
-const MAX_RUN_LENGTH: u8 = 62;
+use crate::consts::*;
 
 impl Pixel {
     fn hash(&self) -> usize {
