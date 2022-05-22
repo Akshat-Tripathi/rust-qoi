@@ -8,17 +8,6 @@ use crate::chunks::{OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN, QOI_CHU
 use crate::util::Pixel;
 use crate::consts::*;
 
-impl Pixel {
-    fn hash(&self) -> usize {
-        (Wrapping(self.r()) * Wrapping(3)
-            + Wrapping(self.g()) * Wrapping(5)
-            + Wrapping(self.b()) * Wrapping(7)
-            + Wrapping(self.a()) * Wrapping(11))
-        .0 as usize
-            % SEEN_PIXEL_ARRAY_SIZE
-    }
-}
-
 pub struct QoiEncoder<W: Write> {
     w: W,
 }

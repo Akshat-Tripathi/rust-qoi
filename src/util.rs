@@ -1,4 +1,8 @@
-#[derive(Clone, Copy, PartialEq, Eq)]
+use std::num::Wrapping;
+
+use crate::consts::SEEN_PIXEL_ARRAY_SIZE;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct Pixel {
     r: u8,
     g: u8,
@@ -34,5 +38,13 @@ impl Pixel {
     pub(crate) fn a(&self) -> u8 {
         self.a
     }
-}
 
+    pub(crate) fn hash(&self) -> usize {
+        (Wrapping(self.r()) * Wrapping(3)
+            + Wrapping(self.g()) * Wrapping(5)
+            + Wrapping(self.b()) * Wrapping(7)
+            + Wrapping(self.a()) * Wrapping(11))
+        .0 as usize
+            % SEEN_PIXEL_ARRAY_SIZE
+    }
+}
