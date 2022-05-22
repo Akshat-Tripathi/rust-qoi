@@ -81,9 +81,6 @@ mod tests {
         #[test]
         fn test_images() {
             for fname in get_images(".png") {
-                if fname != "testcard" {
-                    continue;
-                }
                 let img = ImageReader::open("qoi_test_images/".to_owned() + &fname + ".png")
                     .unwrap()
                     .decode()
@@ -107,17 +104,12 @@ mod tests {
 
     #[cfg(test)]
     mod decoding_tests {
-        use std::io::Read;
-
         use super::*;
         use crate::decoder::QoiDecoder;
 
         #[test]
         fn test_decode() {
             for fname in get_images(".qoi") {
-                if fname != "testcard" {
-                    continue;
-                }
                 let reader =
                     std::fs::read("qoi_test_images/".to_owned() + &fname + ".qoi").unwrap();
                 let decoder = QoiDecoder::new(&reader[..]).unwrap();
@@ -126,26 +118,22 @@ mod tests {
                 let channels = decoder.color_type().channel_count();
                 let mut bytes: Vec<u8> = vec![0; (w * h * channels as u32) as usize];
 
-                let mut reader = decoder.into_reader().unwrap();
-                reader.read(&mut bytes).unwrap();
-                // decoder.read_image(&mut bytes).unwrap();
+                decoder.read_image(&mut bytes).unwrap();
 
                 let reference = ImageReader::open("qoi_test_images/".to_owned() + &fname + ".png")
                     .unwrap()
                     .decode()
                     .unwrap();
 
-                // if bytes != reference.as_bytes() {
-                    // assert_eq!(bytes, reference.as_bytes())
-                // }
-                // assert!(false)
+
+                assert_eq!(bytes, reference.as_bytes())
             }
         }
     }
 
     #[cfg(test)]
     mod general_tests {
-        
+
         use crate::{
             chunks::{OP_DIFF, OP_LUMA},
             util::Pixel,
