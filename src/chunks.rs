@@ -8,6 +8,29 @@ use std::num::Wrapping;
 use crate::consts::SEEN_PIXEL_ARRAY_SIZE;
 use crate::util::Pixel;
 
+pub(crate) enum QoiChunk {
+    RGB(OP_RGB),
+    RGBA(OP_RGBA),
+    RUN(OP_RUN),
+    LUMA(OP_LUMA),
+    DIFF(OP_DIFF),
+    INDEX(OP_INDEX),
+}
+
+impl QoiChunk {
+    pub(crate) fn encode<W: Write>(self, writer: &mut W) -> std::io::Result<()> {
+        match self {
+            QoiChunk::RGB(chunk) => chunk.encode(writer),
+            QoiChunk::RGBA(chunk) => chunk.encode(writer),
+            QoiChunk::LUMA(chunk) => chunk.encode(writer),
+            QoiChunk::DIFF(chunk) => chunk.encode(writer),
+            QoiChunk::INDEX(chunk) => chunk.encode(writer),
+            QoiChunk::RUN(chunk) => chunk.encode(writer),
+            
+        }
+    }
+}
+
 pub(crate) trait QOI_CHUNK<const N: usize>
 where
     Self: Debug,
@@ -30,17 +53,17 @@ where
             if bytes.len() != N {
                 return None;
             }
-            
+
             let bytes = bytes
-            .iter()
-            .map(|r| *r.as_ref().unwrap())
-            .collect::<Vec<u8>>();
-            
+                .iter()
+                .map(|r| *r.as_ref().unwrap())
+                .collect::<Vec<u8>>();
+
             let chunk = Self::from_bytes(&bytes);
-            
+
             #[cfg(test)]
             println!("{:?}", chunk);
-            
+
             Some(chunk)
         } else {
             None
@@ -75,12 +98,7 @@ impl OP_RGB {
 
 impl From<(Pixel, OP_RGB)> for Pixel {
     fn from((px, chunk): (Pixel, OP_RGB)) -> Self {
-        Pixel::new(
-            chunk.r,
-            chunk.g,
-            chunk.b,
-            px.a()
-        )
+        Pixel::new(chunk.r, chunk.g, chunk.b, px.a())
     }
 }
 
@@ -281,7 +299,7 @@ impl From<(Pixel, OP_LUMA)> for Pixel {
             biased_add(px.r(), dr, 32),
             biased_add(px.g(), dg, 32),
             biased_add(px.b(), db, 32),
-            px.a()
+            px.a(),
         )
     }
 }

@@ -2,7 +2,7 @@ use std::{
     convert::TryInto,
     error,
     fmt::Display,
-    io::{Bytes, Read, self},
+    io::{Bytes, Read},
     iter::Peekable,
 };
 
@@ -61,7 +61,6 @@ impl<R: Read> QoiDecoder<R> {
         decoder.read_metadata()?;
         Ok(decoder)
     }
-
 
     fn read_metadata(&mut self) -> ImageResult<()> {
         let mut buf = [0u8; HEADER_SIZE];
@@ -147,7 +146,7 @@ impl<R: Read> Read for QoiReader<R> {
         let mut ptr = buf;
 
         for i in 0..max_iterations {
-            if i == 98247/4 {
+            if i == 98247 / 4 {
                 println!("OP_BREAK");
             }
             self.read_pixel(ptr)?;

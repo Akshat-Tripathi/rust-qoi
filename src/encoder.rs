@@ -1,12 +1,11 @@
 use std::io::Write;
-use std::num::Wrapping;
 
 use image::error::{ImageError, ImageFormatHint, UnsupportedError, UnsupportedErrorKind};
 use image::ImageEncoder;
 
-use crate::chunks::{OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN, QOI_CHUNK};
-use crate::util::Pixel;
+use crate::chunks::{QoiChunk, OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN};
 use crate::consts::*;
+use crate::util::Pixel;
 
 pub struct QoiEncoder<W: Write> {
     w: W,
@@ -17,17 +16,8 @@ impl<W: Write> QoiEncoder<W> {
         QoiEncoder { w }
     }
 
-    fn encode<const CHANNELS: u8>(
-        mut self,
-        buf: &[u8],
-        width: u32,
-        height: u32,
-    ) -> image::ImageResult<()> {
+    fn to_chunks<const CHANNELS: u8>(buf: &[u8]) -> Vec<QoiChunk> {
         let is_rgb = CHANNELS == RGB_CHANNELS;
-        //TODO: check if colour_space is actually 0
-        self.write_header(width, height, CHANNELS, 0)
-            .map_err(|e| ImageError::IoError(e))?;
-
         let mut previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE] =
             [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE];
 
@@ -37,6 +27,8 @@ impl<W: Write> QoiEncoder<W> {
         //Just for easy bookkeeping
         let mut pixel = Pixel::new(0, 0, 0, 255);
         let mut hash_idx;
+
+        let mut chunks = Vec::new();
 
         for chunk in buf.chunks(CHANNELS.into()) {
             last_pixel = pixel;
@@ -53,9 +45,7 @@ impl<W: Write> QoiEncoder<W> {
                 run_length += 1;
                 continue;
             } else if run_length > 0 {
-                OP_RUN::new(run_length)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
+                chunks.push(QoiChunk::RUN(OP_RUN::new(run_length)));
                 if pixel == last_pixel {
                     run_length = 1;
                     continue;
@@ -66,9 +56,7 @@ impl<W: Write> QoiEncoder<W> {
             //2. Pixel seen before -> index
             let looked_up_pixel = previously_seen[hash_idx];
             if looked_up_pixel == pixel {
-                OP_INDEX::new(hash_idx as u8)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
+                chunks.push(QoiChunk::INDEX(OP_INDEX::new(hash_idx as u8)));
                 continue;
             }
 
@@ -80,34 +68,43 @@ impl<W: Write> QoiEncoder<W> {
 
             // 3. Pixel diff > -3 but < 2 -> small diff
             if let Some(op_diff) = OP_DIFF::try_new(last_pixel, pixel) {
-                op_diff
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
+                chunks.push(QoiChunk::DIFF(op_diff));
                 continue;
             }
 
             //4. Green pixel diff in -32..31 -> big diff
             if let Some(op_luma) = OP_LUMA::try_new(last_pixel, pixel) {
-                op_luma
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
+                chunks.push(QoiChunk::LUMA(op_luma));
                 continue;
             }
 
             //5. Save pixel normally
             if pixel.a() == last_pixel.a() || is_rgb {
-                OP_RGB::new(pixel)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
+                chunks.push(QoiChunk::RGB(OP_RGB::new(pixel)))
             } else {
-                OP_RGBA::new(pixel)
-                    .encode(&mut self.w)
-                    .map_err(|e| ImageError::IoError(e))?;
+                chunks.push(QoiChunk::RGBA(OP_RGBA::new(pixel)))
             }
         }
 
         if run_length > 1 {
-            OP_RUN::new(run_length)
+            chunks.push(QoiChunk::RUN(OP_RUN::new(run_length)));
+        }
+
+        chunks
+    }
+
+    fn encode<const CHANNELS: u8>(
+        mut self,
+        buf: &[u8],
+        width: u32,
+        height: u32,
+    ) -> image::ImageResult<()> {
+        //TODO: check if colour_space is actually 0
+        self.write_header(width, height, CHANNELS, 0)
+            .map_err(|e| ImageError::IoError(e))?;
+
+        for chunk in Self::to_chunks::<CHANNELS>(buf) {
+            chunk
                 .encode(&mut self.w)
                 .map_err(|e| ImageError::IoError(e))?;
         }
