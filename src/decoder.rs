@@ -118,7 +118,7 @@ impl<R: Read> QoiReader<R> {
             } else if let Some(chunk) = OP_RGBA::try_decode(&mut self.reader) {
                 chunk.into()
             } else if let Some(chunk) = OP_RGB::try_decode(&mut self.reader) {
-                chunk.into()
+                Pixel::from((self.last_pixel, chunk))
             } else if let Some(chunk) = OP_RUN::try_decode(&mut self.reader) {
                 self.run_length = chunk.run_length() - 1;
                 self.last_pixel
@@ -146,7 +146,10 @@ impl<R: Read> Read for QoiReader<R> {
         let max_iterations = buf.len() / (self.channels as usize);
         let mut ptr = buf;
 
-        for _ in 0..max_iterations {
+        for i in 0..max_iterations {
+            if i == 98247/4 {
+                println!("OP_BREAK");
+            }
             self.read_pixel(ptr)?;
             ptr = &mut ptr[(self.channels as usize)..]
         }

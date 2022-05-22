@@ -73,9 +73,14 @@ impl OP_RGB {
     }
 }
 
-impl From<OP_RGB> for Pixel {
-    fn from(chunk: OP_RGB) -> Self {
-        Pixel::new(chunk.r, chunk.g, chunk.b, 255)
+impl From<(Pixel, OP_RGB)> for Pixel {
+    fn from((px, chunk): (Pixel, OP_RGB)) -> Self {
+        Pixel::new(
+            chunk.r,
+            chunk.g,
+            chunk.b,
+            px.a()
+        )
     }
 }
 
