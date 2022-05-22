@@ -1,8 +1,8 @@
 mod chunks;
+mod consts;
+pub mod decoder;
 pub mod encoder;
 mod util;
-pub mod decoder;
-mod consts;
 
 #[cfg(test)]
 mod tests {
@@ -102,7 +102,6 @@ mod tests {
         }
     }
 
-
     #[cfg(test)]
     mod decoding_tests {
         use super::*;
@@ -112,6 +111,51 @@ mod tests {
             for fname in get_images(".qoi") {
                 let bytes = std::fs::read("qoi_test_images/".to_owned() + &fname + ".qoi").unwrap();
                 println!("{:?}", bytes)
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod general_tests {
+        use super::*;
+        use crate::{
+            chunks::{OP_DIFF, OP_LUMA},
+            util::Pixel,
+        };
+
+        #[test]
+        fn test_op_diff_to_pixel_conversion() {
+            let base_pixel = Pixel::new(2, 2, 2, 0);
+
+            for i in -2..1 {
+                let test_pixel = Pixel::new(
+                    (base_pixel.r() as i32 + i) as u8,
+                    (base_pixel.g() as i32 + i) as u8,
+                    (base_pixel.b() as i32 + i) as u8,
+                    base_pixel.a(),
+                );
+
+                let chunk = OP_DIFF::try_new(base_pixel, test_pixel).unwrap();
+
+                assert_eq!(Pixel::from((base_pixel, chunk)), test_pixel);
+            }
+        }
+
+        #[test]
+        fn test_op_luma_to_pixel_conversion() {
+            let base_pixel = Pixel::new(100, 100, 100, 100);
+
+            for i in -32..31 {
+                let test_pixel = Pixel::new(
+                    (base_pixel.r() as i32 + i) as u8,
+                    (base_pixel.g() as i32 + i) as u8,
+                    (base_pixel.b() as i32 + i) as u8,
+                    base_pixel.a(),
+                );
+
+                let chunk = OP_LUMA::try_new(base_pixel, test_pixel).unwrap();
+
+                assert_eq!(Pixel::from((base_pixel, chunk)), test_pixel);
             }
         }
     }
