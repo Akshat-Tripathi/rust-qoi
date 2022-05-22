@@ -1,10 +1,11 @@
 #![allow(non_camel_case_types)]
 
 use std::fmt::Debug;
-use std::io::Write;
+use std::io::{Bytes, Read, Write};
 use std::iter::Peekable;
 use std::num::Wrapping;
 
+use crate::consts::SEEN_PIXEL_ARRAY_SIZE;
 use crate::util::Pixel;
 
 pub(crate) trait QOI_CHUNK<const N: usize>
@@ -19,16 +20,20 @@ where
         writer.write_all(&bytes)
     }
 
-    fn try_decode(buf: &mut Peekable<impl Iterator<Item = u8>>) -> Option<Self>
+    fn try_decode<R: Read>(buf: &mut Peekable<Bytes<R>>) -> Option<Self>
     where
         Self: Sized,
     {
-        let flag = *buf.peek()?;
+        let flag = *buf.peek()?.as_ref().ok()?;
         if Self::matches(flag) {
-            let bytes = buf.take(N).collect::<Vec<u8>>();
+            let bytes = buf.take(N).collect::<Vec<std::io::Result<u8>>>();
             if bytes.len() != N {
-                return None
+                return None;
             }
+            let bytes = bytes
+                .iter()
+                .map(|r| *r.as_ref().unwrap())
+                .collect::<Vec<u8>>();
             Some(Self::from_bytes(&bytes))
         } else {
             None
@@ -146,6 +151,12 @@ impl OP_INDEX {
     }
 }
 
+impl From<([Pixel; SEEN_PIXEL_ARRAY_SIZE], OP_INDEX)> for Pixel {
+    fn from((arr, chunk): ([Pixel; SEEN_PIXEL_ARRAY_SIZE], OP_INDEX)) -> Self {
+        arr[chunk.index as usize]
+    }
+}
+
 impl QOI_CHUNK<{ Self::SIZE }> for OP_INDEX {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG << 6 | self.index]
@@ -186,6 +197,17 @@ impl OP_DIFF {
         } else {
             None
         }
+    }
+}
+
+impl From<(Pixel, OP_DIFF)> for Pixel {
+    fn from((px, chunk): (Pixel, OP_DIFF)) -> Self {
+        Pixel::new(
+            px.r() + chunk.dr - 2,
+            px.g() + chunk.dg - 2,
+            px.b() + chunk.db - 2,
+            px.a(),
+        )
     }
 }
 
@@ -234,6 +256,20 @@ impl OP_LUMA {
         } else {
             None
         }
+    }
+}
+
+impl From<(Pixel, OP_LUMA)> for Pixel {
+    fn from((px, chunk): (Pixel, OP_LUMA)) -> Self {
+        let db = chunk.db_dg + chunk.dg - 8;
+        let dr = chunk.dr_dg + chunk.dg - 8;
+
+        Pixel::new(
+            px.r() + dr - 32,
+            px.g() + chunk.dg - 32,
+            px.b() + db - 32,
+            px.a()
+        )
     }
 }
 
