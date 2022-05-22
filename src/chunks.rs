@@ -30,11 +30,18 @@ where
             if bytes.len() != N {
                 return None;
             }
+            
             let bytes = bytes
-                .iter()
-                .map(|r| *r.as_ref().unwrap())
-                .collect::<Vec<u8>>();
-            Some(Self::from_bytes(&bytes))
+            .iter()
+            .map(|r| *r.as_ref().unwrap())
+            .collect::<Vec<u8>>();
+            
+            let chunk = Self::from_bytes(&bytes);
+            
+            #[cfg(test)]
+            println!("{:?}", chunk);
+            
+            Some(chunk)
         } else {
             None
         }
