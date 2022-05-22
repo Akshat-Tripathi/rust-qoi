@@ -203,9 +203,9 @@ impl OP_DIFF {
 impl From<(Pixel, OP_DIFF)> for Pixel {
     fn from((px, chunk): (Pixel, OP_DIFF)) -> Self {
         Pixel::new(
-            px.r() + chunk.dr - 2,
-            px.g() + chunk.dg - 2,
-            px.b() + chunk.db - 2,
+            biased_add(px.r(), chunk.dr, 2),
+            biased_add(px.g(), chunk.dg, 2),
+            biased_add(px.b(), chunk.db, 2),
             px.a(),
         )
     }
@@ -261,13 +261,14 @@ impl OP_LUMA {
 
 impl From<(Pixel, OP_LUMA)> for Pixel {
     fn from((px, chunk): (Pixel, OP_LUMA)) -> Self {
-        let db = chunk.db_dg + chunk.dg - 8;
-        let dr = chunk.dr_dg + chunk.dg - 8;
+        let dr = biased_add(chunk.dr_dg, chunk.dg, 8);
+        let dg = chunk.dg;
+        let db = biased_add(chunk.db_dg, chunk.dg, 8);
 
         Pixel::new(
-            px.r() + dr - 32,
-            px.g() + chunk.dg - 32,
-            px.b() + db - 32,
+            biased_add(px.r(), dr, 32),
+            biased_add(px.g(), dg, 32),
+            biased_add(px.b(), db, 32),
             px.a()
         )
     }
@@ -327,4 +328,8 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_RUN {
 
 fn biased_sub(a: u8, b: u8, bias: u8) -> u8 {
     (Wrapping(a as i16 - b as i16).0 + bias as i16) as u8
+}
+
+fn biased_add(a: u8, b: u8, bias: u8) -> u8 {
+    (Wrapping(a as i16 + b as i16).0 - bias as i16) as u8
 }
