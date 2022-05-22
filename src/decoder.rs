@@ -120,7 +120,7 @@ impl<R: Read> QoiReader<R> {
             } else if let Some(chunk) = OP_RGB::try_decode(&mut self.reader) {
                 chunk.into()
             } else if let Some(chunk) = OP_RUN::try_decode(&mut self.reader) {
-                self.run_length = chunk.run_length();
+                self.run_length = chunk.run_length() - 1;
                 self.last_pixel
             } else {
                 return Err(io::Error::last_os_error()); //TODO: change this
@@ -146,7 +146,7 @@ impl<R: Read> Read for QoiReader<R> {
         let max_iterations = buf.len() / (self.channels as usize);
 
         for _ in 0..max_iterations {
-            self.read_pixel(buf)?
+            self.read_pixel(buf)?;
         }
 
         Ok(max_iterations * self.channels as usize)
