@@ -26,7 +26,19 @@ impl QoiChunk {
             QoiChunk::DIFF(chunk) => chunk.encode(writer),
             QoiChunk::INDEX(chunk) => chunk.encode(writer),
             QoiChunk::RUN(chunk) => chunk.encode(writer),
-            
+        }
+    }
+}
+
+impl From<(Pixel, [Pixel; SEEN_PIXEL_ARRAY_SIZE], QoiChunk)> for Pixel {
+    fn from((px, seen, chunk): (Pixel, [Pixel; SEEN_PIXEL_ARRAY_SIZE], QoiChunk)) -> Self {
+        match chunk {
+            QoiChunk::RGB(chunk) => (px, chunk).into(),
+            QoiChunk::RGBA(chunk) => chunk.into(),
+            QoiChunk::RUN(chunk) => (px, chunk).into(),
+            QoiChunk::LUMA(chunk) => (px, chunk).into(),
+            QoiChunk::DIFF(chunk) => (px, chunk).into(),
+            QoiChunk::INDEX(chunk) => (seen, chunk).into(),
         }
     }
 }
@@ -338,6 +350,12 @@ impl OP_RUN {
     #[must_use]
     pub(crate) fn run_length(&self) -> u8 {
         self.run_length
+    }
+}
+
+impl From<(Pixel, OP_RUN)> for Pixel {
+    fn from((px, chunk): (Pixel, OP_RUN)) -> Self {
+        px
     }
 }
 
