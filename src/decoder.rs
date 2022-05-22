@@ -99,7 +99,7 @@ impl<R: Read> QoiReader<R> {
         QoiReader {
             reader: reader.bytes().peekable(),
             previously_seen: [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE],
-            last_pixel: Pixel::new(0, 0, 0, 0),
+            last_pixel: Pixel::new(0, 0, 0, 255),
             run_length: 0,
             channels,
         }
@@ -123,7 +123,7 @@ impl<R: Read> QoiReader<R> {
                 self.run_length = chunk.run_length() - 1;
                 self.last_pixel
             } else {
-                return Err(io::Error::last_os_error()); //TODO: change this
+                unreachable!()
             };
 
             self.previously_seen[pixel.hash()] = pixel;
@@ -144,9 +144,11 @@ impl<R: Read> Read for QoiReader<R> {
     //This will return self.channels * number of pixels read
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let max_iterations = buf.len() / (self.channels as usize);
+        let mut ptr = buf;
 
         for _ in 0..max_iterations {
-            self.read_pixel(buf)?;
+            self.read_pixel(ptr)?;
+            ptr = &mut ptr[(self.channels as usize)..]
         }
 
         Ok(max_iterations * self.channels as usize)
