@@ -69,6 +69,10 @@ impl<const CHANNELS: u8> QoiCodecState<CHANNELS> {
         self.cleanup(chunks, Some(chunk), pixel)
     }
 
+
+    //This only exists because every time we need to return something from process_pixel, there's some cleanup code that needs to be run
+    //which is this
+    #[inline]
     fn cleanup(&mut self, mut chunks: Vec<QoiChunk>, chunk: Option<QoiChunk>, pixel: Pixel) -> Vec<QoiChunk> {
         if let Some(chunk) = chunk {
             chunks.push(chunk);
