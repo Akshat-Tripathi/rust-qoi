@@ -3,6 +3,7 @@ mod consts;
 pub mod decoder;
 pub mod encoder;
 mod util;
+mod codec;
 
 #[cfg(test)]
 mod tests {
