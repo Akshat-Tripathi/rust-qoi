@@ -354,7 +354,7 @@ impl OP_RUN {
 }
 
 impl From<(Pixel, OP_RUN)> for Pixel {
-    fn from((px, chunk): (Pixel, OP_RUN)) -> Self {
+    fn from((px, _): (Pixel, OP_RUN)) -> Self {
         px
     }
 }
