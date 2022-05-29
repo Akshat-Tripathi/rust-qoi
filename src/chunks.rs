@@ -34,17 +34,18 @@ impl QoiChunk {
         buf: &mut Peekable<Bytes<R>>,
         state: &QoiCodecState,
     ) -> Self {
-        if let Some(chunk) = OP_DIFF::try_decode(buf, state) {
+        if let Some(chunk) = OP_DIFF::try_decode(buf) {
             QoiChunk::DIFF(chunk)
-        } else if let Some(chunk) = OP_INDEX::try_decode(buf, state) {
+        } else if let Some(chunk) = OP_INDEX::try_decode(buf) {
             QoiChunk::INDEX(chunk)
-        } else if let Some(chunk) = OP_LUMA::try_decode(buf, state) {
+        } else if let Some(chunk) = OP_LUMA::try_decode(buf) {
             QoiChunk::LUMA(chunk)
-        } else if let Some(chunk) = OP_RGBA::try_decode(buf, state) {
+        } else if let Some(chunk) = OP_RGBA::try_decode(buf) {
             QoiChunk::RGBA(chunk)
-        } else if let Some(chunk) = OP_RGB::try_decode(buf, state) {
+        } else if let Some(mut chunk) = OP_RGB::try_decode(buf) {
+            chunk.a = state.last_pixel.a();
             QoiChunk::RGB(chunk)
-        } else if let Some(chunk) = OP_RUN::try_decode(buf, state) {
+        } else if let Some(chunk) = OP_RUN::try_decode(buf) {
             QoiChunk::RUN(chunk)
         } else {
             unreachable!()
@@ -52,7 +53,7 @@ impl QoiChunk {
     }
 }
 
-pub(crate) trait QOI_CHUNK<const N: usize>
+trait QOI_CHUNK<const N: usize>
 where
     Self: Debug,
 {
@@ -64,7 +65,7 @@ where
         writer.write_all(&bytes)
     }
 
-    fn try_decode<R: Read>(buf: &mut Peekable<Bytes<R>>, _state: &QoiCodecState) -> Option<Self>
+    fn try_decode<R: Read>(buf: &mut Peekable<Bytes<R>>) -> Option<Self>
     where
         Self: Sized,
     {
@@ -102,24 +103,26 @@ pub(crate) struct OP_RGB {
     r: u8,
     g: u8,
     b: u8,
+    a: u8, //This field isn't encoded, but the information comes in handy during encoding
 }
 
 impl OP_RGB {
     const FLAG: u8 = 0b1111_1110;
     const SIZE: usize = 4;
 
-    pub fn new(pixel: Pixel) -> OP_RGB {
+    pub fn new(pixel: Pixel, alpha: u8) -> OP_RGB {
         OP_RGB {
             r: pixel.r(),
             g: pixel.g(),
             b: pixel.b(),
+            a: alpha,
         }
     }
 }
 
-impl From<(Pixel, OP_RGB)> for Pixel {
-    fn from((px, chunk): (Pixel, OP_RGB)) -> Self {
-        Pixel::new(chunk.r, chunk.g, chunk.b, px.a())
+impl From<OP_RGB> for Pixel {
+    fn from(chunk: OP_RGB) -> Self {
+        Pixel::new(chunk.r, chunk.g, chunk.b, chunk.a)
     }
 }
 
@@ -137,6 +140,7 @@ impl QOI_CHUNK<{ Self::SIZE }> for OP_RGB {
             r: buffer[1],
             g: buffer[2],
             b: buffer[3],
+            a: 0,
         }
     }
 }

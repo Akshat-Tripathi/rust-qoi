@@ -67,7 +67,7 @@ impl QoiCodecState {
 
         //5. Save pixel normally
         let chunk = if pixel.a() == self.last_pixel.a() || is_rgb {
-            QoiChunk::RGB(OP_RGB::new(pixel))
+            QoiChunk::RGB(OP_RGB::new(pixel, pixel.a()))
         } else {
             QoiChunk::RGBA(OP_RGBA::new(pixel))
         };
@@ -127,7 +127,7 @@ impl QoiCodecState {
 impl QoiCodecState {
     pub(crate) fn lookup_chunk(&self, chunk: QoiChunk) -> Pixel {
         match chunk {
-            QoiChunk::RGB(chunk) => (self.last_pixel, chunk).into(),
+            QoiChunk::RGB(chunk) => chunk.into(),
             QoiChunk::RGBA(chunk) => chunk.into(),
             QoiChunk::RUN(chunk) => (self.last_pixel, chunk).into(),
             QoiChunk::LUMA(chunk) => (self.last_pixel, chunk).into(),
