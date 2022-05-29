@@ -21,8 +21,8 @@ impl<W: Write> QoiEncoder<W> {
     fn to_chunks<const CHANNELS: u8>(
         buf: &[u8],
     ) -> (
-        Vec<QoiChunk>,
-        QoiCodecState<CHANNELS>
+        Vec<(QoiChunk, bool)>,
+        QoiCodecState
     ) {
         let is_rgb = CHANNELS == RGB_CHANNELS;
 

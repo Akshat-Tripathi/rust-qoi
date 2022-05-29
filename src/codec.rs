@@ -1,25 +1,23 @@
-use crate::chunks::{QoiChunk, OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN};
 use crate::consts::*;
 use crate::util::Pixel;
 
-pub(crate) struct QoiCodecState<const CHANNELS: u8> {
     last_pixel: Pixel,
     previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE],
     run_length: u8,
     modified: u64, //This must be the same as SEEN_PIXEL_ARRAY_SIZE
+pub(crate) struct QoiCodecState {
 }
 
-impl<const CHANNELS: u8> QoiCodecState<CHANNELS> {
+impl QoiCodecState {
     pub(crate) fn new() -> Self {
         Self {
             last_pixel: Pixel::new(0, 0, 0, 255),
             previously_seen: [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE],
             run_length: 0,
-            modified: 0
         }
     }
 
-    pub(crate) fn process_pixel(&mut self, pixel: Pixel) -> Vec<(QoiChunk, bool)> {
+    pub(crate) fn process_pixel<const CHANNELS: u8>(&mut self, pixel: Pixel) -> Vec<(QoiChunk, bool)> {
         let is_rgb = CHANNELS == RGB_CHANNELS;
 
         let mut chunks = vec![];
@@ -112,10 +110,10 @@ impl<const CHANNELS: u8> QoiCodecState<CHANNELS> {
     }
 
     //Assumes other is further down in parsing than self
-    pub(crate) fn merge(&mut self, other: QoiCodecState<CHANNELS>) {
+    pub(crate) fn merge(&mut self, other: QoiCodecState) {
         self.last_pixel = other.last_pixel;
         self.run_length = other.run_length;
-        
+
         for (i, px) in other.previously_seen.iter().enumerate() {
             if other.modified(i) {
                 self.previously_seen[i] = px.to_owned();
