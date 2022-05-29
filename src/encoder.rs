@@ -22,12 +22,10 @@ impl<W: Write> QoiEncoder<W> {
         buf: &[u8],
     ) -> (
         Vec<QoiChunk>,
-        Vec<usize>,
         QoiCodecState<CHANNELS>
     ) {
         let is_rgb = CHANNELS == RGB_CHANNELS;
 
-        let mut unresolved_chunk_indices: Vec<usize> = Vec::new();
         let mut chunks = Vec::new();
 
         let mut codec_state = QoiCodecState::new();
@@ -39,11 +37,7 @@ impl<W: Write> QoiEncoder<W> {
                 Pixel::new(chunk[0], chunk[1], chunk[2], chunk[3])
             };
 
-            for chunk in codec_state.process_pixel(pixel) {
-                match chunk {
-                    QoiChunk::RGB(_) |  QoiChunk::RGBA(_) => {unresolved_chunk_indices.push(chunks.len());},
-                    _ => {}
-                }
+            for (chunk, _) in codec_state.process_pixel(pixel) {
                 chunks.push(chunk);
             }            
         }
@@ -54,7 +48,6 @@ impl<W: Write> QoiEncoder<W> {
 
         (
             chunks,
-            unresolved_chunk_indices,
             codec_state
         )
     }
@@ -69,24 +62,23 @@ impl<W: Write> QoiEncoder<W> {
         self.write_header(width, height, CHANNELS, 0)
             .map_err(|e| ImageError::IoError(e))?;
 
-        // let splits = 8; //TODO: change this
+        let splits = 8; //TODO: change this
 
-        // let mut splits = buf
-        //     .chunks(buf.len() / splits)
-        //     .map(Self::to_chunks::<CHANNELS>);
+        let mut splits = buf
+            .chunks(buf.len() / splits)
+            .map(Self::to_chunks::<CHANNELS>);
 
-        //Stitch all the split up chunks back together
-        // let (mut all_chunks, mut last_pixel, mut previously_seen, _) = splits.next().unwrap();
+        // Stitch all the split up chunks back together
+        let (chunks, global_state) = splits.next().unwrap();
 
-        // for (mut chunks, last_pixel1, previously_seen1, unresolved_chunks) in splits {
-        //     last_pixel = last_pixel1;
-        //     previously_seen = previously_seen1;
-        //     all_chunks.append(&mut chunks);
-        // }
-
-        let (chunks, _, _) = Self::to_chunks::<CHANNELS>(buf);
         for chunk in chunks {
             chunk.encode(&mut self.w).map_err(|e| ImageError::IoError(e))?;
+        }
+
+        for (chunks, state) in splits {
+            // chunks.append(&mut chunks);
+
+            //Merge states
         }
 
         self.w
