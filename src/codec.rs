@@ -6,6 +6,7 @@ pub(crate) struct QoiCodecState<const CHANNELS: u8> {
     last_pixel: Pixel,
     previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE],
     run_length: u8,
+    modified: u64, //This must be the same as SEEN_PIXEL_ARRAY_SIZE
 }
 
 impl<const CHANNELS: u8> QoiCodecState<CHANNELS> {
@@ -14,6 +15,7 @@ impl<const CHANNELS: u8> QoiCodecState<CHANNELS> {
             last_pixel: Pixel::new(0, 0, 0, 255),
             previously_seen: [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE],
             run_length: 0,
+            modified: 0
         }
     }
 
@@ -53,6 +55,7 @@ impl<const CHANNELS: u8> QoiCodecState<CHANNELS> {
         //be in the array, so we can skip it.
         //If this was any further down, then continues would skip adding some pixels
         self.previously_seen[hash_idx] = pixel;
+        self.modified |= 1 << hash_idx;
 
         // 3. Pixel diff > -3 but < 2 -> small diff
         if let Some(op_diff) = OP_DIFF::try_new(self.last_pixel, pixel) {
@@ -101,6 +104,34 @@ impl<const CHANNELS: u8> QoiCodecState<CHANNELS> {
             Some(QoiChunk::RUN(OP_RUN::new(self.run_length)))
         } else {
             None
+        }
+    }
+
+    pub(crate) fn modified(&self, hash_idx: usize) -> bool {
+        (self.modified & (1 << hash_idx)) > 0
+    }
+
+    //Assumes other is further down in parsing than self
+    pub(crate) fn merge(&mut self, other: QoiCodecState<CHANNELS>) {
+        self.last_pixel = other.last_pixel;
+        self.run_length = other.run_length;
+        
+        for (i, px) in other.previously_seen.iter().enumerate() {
+            if other.modified(i) {
+                self.previously_seen[i] = px.to_owned();
+            }
+        }
+        self.modified |= other.modified;
+    }
+
+    pub(crate) fn lookup(&self, chunk: QoiChunk) -> Pixel {
+                match chunk {
+            QoiChunk::RGB(chunk) => (self.last_pixel, chunk).into(),
+            QoiChunk::RGBA(chunk) => chunk.into(),
+            QoiChunk::RUN(chunk) => (self.last_pixel, chunk).into(),
+            QoiChunk::LUMA(chunk) => (self.last_pixel, chunk).into(),
+            QoiChunk::DIFF(chunk) => (self.last_pixel, chunk).into(),
+            QoiChunk::INDEX(chunk) => (self.previously_seen, chunk).into(),
         }
     }
 }
