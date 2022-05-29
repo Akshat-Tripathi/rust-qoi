@@ -29,6 +29,27 @@ impl QoiChunk {
             QoiChunk::RUN(chunk) => chunk.encode(writer),
         }
     }
+
+    pub(crate) fn decode<R: Read>(
+        buf: &mut Peekable<Bytes<R>>,
+        state: &QoiCodecState,
+    ) -> Self {
+        if let Some(chunk) = OP_DIFF::try_decode(buf, state) {
+            QoiChunk::DIFF(chunk)
+        } else if let Some(chunk) = OP_INDEX::try_decode(buf, state) {
+            QoiChunk::INDEX(chunk)
+        } else if let Some(chunk) = OP_LUMA::try_decode(buf, state) {
+            QoiChunk::LUMA(chunk)
+        } else if let Some(chunk) = OP_RGBA::try_decode(buf, state) {
+            QoiChunk::RGBA(chunk)
+        } else if let Some(chunk) = OP_RGB::try_decode(buf, state) {
+            QoiChunk::RGB(chunk)
+        } else if let Some(chunk) = OP_RUN::try_decode(buf, state) {
+            QoiChunk::RUN(chunk)
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 pub(crate) trait QOI_CHUNK<const N: usize>
@@ -43,7 +64,7 @@ where
         writer.write_all(&bytes)
     }
 
-    fn try_decode<R: Read>(buf: &mut Peekable<Bytes<R>>) -> Option<Self>
+    fn try_decode<R: Read>(buf: &mut Peekable<Bytes<R>>, _state: &QoiCodecState) -> Option<Self>
     where
         Self: Sized,
     {

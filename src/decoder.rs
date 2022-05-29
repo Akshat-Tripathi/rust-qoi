@@ -9,9 +9,8 @@ use std::{
 use image::{error::DecodingError, ImageDecoder, ImageError, ImageResult};
 
 use crate::{
-    chunks::{OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN, QOI_CHUNK},
-    consts::SEEN_PIXEL_ARRAY_SIZE,
-    util::Pixel,
+    chunks::QoiChunk,
+    codec::QoiCodecState,
 };
 
 const HEADER_SIZE: usize = 14;
@@ -87,9 +86,7 @@ impl<R: Read> QoiDecoder<R> {
 
 pub struct QoiReader<R: Read> {
     reader: Peekable<Bytes<R>>,
-    previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE],
-    last_pixel: Pixel,
-    run_length: u8, //Current run length
+    state: QoiCodecState,
     channels: u8,
 }
 
@@ -97,63 +94,39 @@ impl<R: Read> QoiReader<R> {
     pub fn new(reader: R, channels: u8) -> QoiReader<R> {
         QoiReader {
             reader: reader.bytes().peekable(),
-            previously_seen: [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE],
-            last_pixel: Pixel::new(0, 0, 0, 255),
-            run_length: 0,
+            state: QoiCodecState::new(),
             channels,
         }
     }
 
-    fn read_pixel(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
-        if self.run_length > 0 {
-            self.run_length -= 1;
-        } else {
-            let pixel = if let Some(chunk) = OP_DIFF::try_decode(&mut self.reader) {
-                Pixel::from((self.last_pixel, chunk))
-            } else if let Some(chunk) = OP_INDEX::try_decode(&mut self.reader) {
-                Pixel::from((self.previously_seen, chunk))
-            } else if let Some(chunk) = OP_LUMA::try_decode(&mut self.reader) {
-                Pixel::from((self.last_pixel, chunk))
-            } else if let Some(chunk) = OP_RGBA::try_decode(&mut self.reader) {
-                chunk.into()
-            } else if let Some(chunk) = OP_RGB::try_decode(&mut self.reader) {
-                Pixel::from((self.last_pixel, chunk))
-            } else if let Some(chunk) = OP_RUN::try_decode(&mut self.reader) {
-                self.run_length = chunk.run_length() - 1;
-                self.last_pixel
-            } else {
-                unreachable!()
-            };
+    fn read_chunk<'a>(&mut self, buf: &'a mut [u8]) -> std::io::Result<&'a mut [u8]> {
+        let chunk = QoiChunk::decode(&mut self.reader, &self.state);
+        let (pixel, repeats) = self.state.process_chunk(chunk);
 
-            self.previously_seen[pixel.hash()] = pixel;
-            self.last_pixel = pixel;
+        for i in 0..repeats {
+            let i = i * (self.channels as usize);
+            buf[i] = pixel.r();
+            buf[i+1] = pixel.g();
+            buf[i+2] = pixel.b();
+            if self.channels == 4 {
+                buf[i+3] = pixel.a();
+            }
         }
-
-        buf[0] = self.last_pixel.r();
-        buf[1] = self.last_pixel.g();
-        buf[2] = self.last_pixel.b();
-        if self.channels == 4 {
-            buf[3] = self.last_pixel.a();
-        }
-        Ok(())
+        Ok(&mut buf[((self.channels as usize)*repeats)..])
     }
 }
 
 impl<R: Read> Read for QoiReader<R> {
     //This will return self.channels * number of pixels read
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let max_iterations = buf.len() / (self.channels as usize);
+        let len = buf.len();
         let mut ptr = buf;
 
-        for i in 0..max_iterations {
-            if i == 98247 / 4 {
-                println!("OP_BREAK");
-            }
-            self.read_pixel(ptr)?;
-            ptr = &mut ptr[(self.channels as usize)..]
+        while ptr.len() >= self.channels.into() {
+            ptr = self.read_chunk(ptr)?;
         }
 
-        Ok(max_iterations * self.channels as usize)
+        Ok(len - ptr.len())
     }
 }
 

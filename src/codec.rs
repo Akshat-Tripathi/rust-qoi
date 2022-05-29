@@ -121,15 +121,28 @@ impl QoiCodecState {
         }
         self.modified |= other.modified;
     }
+}
 
-    pub(crate) fn lookup(&self, chunk: QoiChunk) -> Pixel {
-                match chunk {
+//This covers all methods related to decoding
+impl QoiCodecState {
+    pub(crate) fn lookup_chunk(&self, chunk: QoiChunk) -> Pixel {
+        match chunk {
             QoiChunk::RGB(chunk) => (self.last_pixel, chunk).into(),
             QoiChunk::RGBA(chunk) => chunk.into(),
             QoiChunk::RUN(chunk) => (self.last_pixel, chunk).into(),
             QoiChunk::LUMA(chunk) => (self.last_pixel, chunk).into(),
             QoiChunk::DIFF(chunk) => (self.last_pixel, chunk).into(),
             QoiChunk::INDEX(chunk) => (self.previously_seen, chunk).into(),
+        }
+    }
+
+    pub(crate) fn process_chunk(&mut self, chunk: QoiChunk) -> (Pixel, usize) {
+        if let QoiChunk::RUN(chunk) = chunk {
+            (self.last_pixel, chunk.run_length() as usize)
+        } else {
+            self.last_pixel = self.lookup_chunk(chunk);
+            self.previously_seen[self.last_pixel.hash()] = self.last_pixel;
+            (self.last_pixel, 1)
         }
     }
 }
