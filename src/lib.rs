@@ -105,8 +105,22 @@ mod tests {
 
     #[cfg(test)]
     mod decoding_tests {
+        use std::io::Read;
+
         use super::*;
-        use crate::decoder::QoiDecoder;
+        use crate::decoder::{QoiDecoder, QoiReader};
+
+        #[test]
+        fn test_rle_decoding() {
+            //254 is OP_RGB and the weird | thing is OP_RUN
+            let img = Vec::from([254, 100, 100, 0, 0b1100_0000 | (3 - 1)]);
+            let mut decoder = QoiReader::new(&img[..], 3);
+
+            let mut buf = vec![0u8; 12];
+            decoder.read(&mut buf).unwrap();
+            
+            assert!(buf == &[100, 100, 0, 100, 100, 0, 100, 100, 0, 100, 100, 0])
+        }
 
         #[test]
         fn test_decode() {
