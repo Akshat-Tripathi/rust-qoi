@@ -39,17 +39,10 @@ impl<W: Write> QoiEncoder<W> {
 
             for (chunk, _) in codec_state.process_pixel(pixel) {
                 chunks.push(chunk);
-            }            
+            }
         }
 
-        if let Some(chunk) = codec_state.drain() {
-            chunks.push(chunk);
-        }
-
-        (
-            chunks,
-            codec_state
-        )
+        (chunks, codec_state)
     }
 
     fn encode<const CHANNELS: u8>(
@@ -69,16 +62,21 @@ impl<W: Write> QoiEncoder<W> {
             .map(Self::to_chunks::<CHANNELS>);
 
         // Stitch all the split up chunks back together
-        let (chunks, global_state) = splits.next().unwrap();
+        let (chunks, mut global_state) = splits.next().unwrap();
 
-        for chunk in chunks {
-            chunk.encode(&mut self.w).map_err(|e| ImageError::IoError(e))?;
+        for (chunk, _) in chunks {
+            chunk
+                .encode(&mut self.w)
+                .map_err(|e| ImageError::IoError(e))?;
         }
 
         for (chunks, state) in splits {
             // chunks.append(&mut chunks);
 
-            //Merge states
+        if let Some((chunk, _)) = global_state.drain() {
+            chunk
+                .encode(&mut self.w)
+                .map_err(|e| ImageError::IoError(e))?;
         }
 
         self.w
