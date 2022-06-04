@@ -82,10 +82,18 @@ impl<W: Write> QoiEncoder<W> {
             match chunks1.len() {
                 0 => {
                     chunks.pop(); //Get rid of the dummy chunk
-                    let mut actual_run_length = global_state.run_length();
-                    while let (QoiChunk::RUN(run), true) = &chunks[0] {
-                        actual_run_length += run.run_length();
-                        chunks.pop();
+                    let mut actual_run_length = temp_state.run_length();
+                    if chunks.len() > 0 {
+                        while let (QoiChunk::RUN(run), true) = &chunks[0] {
+                            actual_run_length += run.run_length();
+                            chunks.pop();
+                        }
+                    }
+
+                    //We've run out of chunks, so try draining the global state
+                    if chunks.len() == 0 {
+                        actual_run_length += global_state.run_length();
+                        global_state.drain();
                     }
 
                     while actual_run_length > MAX_RUN_LENGTH {
