@@ -43,7 +43,7 @@ impl QoiChunk {
         } else if let Some(chunk) = OP_RGBA::try_decode(buf) {
             QoiChunk::RGBA(chunk)
         } else if let Some(mut chunk) = OP_RGB::try_decode(buf) {
-            chunk.a = state.last_pixel.a();
+            chunk.a = state.last_pixel().a();
             QoiChunk::RGB(chunk)
         } else if let Some(chunk) = OP_RUN::try_decode(buf) {
             QoiChunk::RUN(chunk)

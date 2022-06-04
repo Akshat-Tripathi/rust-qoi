@@ -1,11 +1,13 @@
+use crate::chunks::{QoiChunk, OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN};
 use crate::consts::*;
 use crate::util::Pixel;
 
+#[derive(Clone, Copy)]
+pub(crate) struct QoiCodecState {
     last_pixel: Pixel,
     previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE],
     run_length: u8,
     modified: u64, //This must be the same as SEEN_PIXEL_ARRAY_SIZE
-pub(crate) struct QoiCodecState {
 }
 
 impl QoiCodecState {
@@ -14,10 +16,14 @@ impl QoiCodecState {
             last_pixel: Pixel::new(0, 0, 0, 255),
             previously_seen: [Pixel::new(0, 0, 0, 0); SEEN_PIXEL_ARRAY_SIZE],
             run_length: 0,
+            modified: 0,
         }
     }
 
-    pub(crate) fn process_pixel<const CHANNELS: u8>(&mut self, pixel: Pixel) -> Vec<(QoiChunk, bool)> {
+    pub(crate) fn process_pixel<const CHANNELS: u8>(
+        &mut self,
+        pixel: Pixel,
+    ) -> Vec<(QoiChunk, bool)> {
         let is_rgb = CHANNELS == RGB_CHANNELS;
 
         let mut chunks = vec![];
@@ -90,16 +96,18 @@ impl QoiCodecState {
         chunks
     }
 
+    //TODO: Add check to modified bitset
     fn is_resolved(&self, chunk: &QoiChunk) -> bool {
         match chunk {
-            QoiChunk::RGB(_) | QoiChunk::RGBA(_) => true,
-            _ => false,
+            QoiChunk::RGB(_) | QoiChunk::RGBA(_) => false,
+            _ => true,
         }
     }
 
-    pub(crate) fn drain(&mut self) -> Option<QoiChunk> {
+    //Will optionally return a run length encoded chunk
+    pub(crate) fn drain(&mut self) -> Option<(QoiChunk, bool)> {
         if self.run_length > 1 {
-            Some(QoiChunk::RUN(OP_RUN::new(self.run_length)))
+            Some((QoiChunk::RUN(OP_RUN::new(self.run_length)), true))
         } else {
             None
         }
@@ -120,6 +128,14 @@ impl QoiCodecState {
             }
         }
         self.modified |= other.modified;
+    }
+
+    pub(crate) fn last_pixel(&self) -> Pixel {
+        self.last_pixel
+    }
+
+    pub(crate) fn run_length(&self) -> u8 {
+        self.run_length
     }
 }
 
