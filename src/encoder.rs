@@ -49,7 +49,7 @@ impl<W: Write> QoiEncoder<W> {
         self.write_header(width, height, CHANNELS, 0)
             .map_err(|e| ImageError::IoError(e))?;
 
-        let splits = 1; //TODO: change this
+        let splits = 2; //TODO: change this
 
         let mut splits = buf
             .chunks(buf.len() / splits)
@@ -114,8 +114,12 @@ impl<W: Write> QoiEncoder<W> {
 
             for (chunk, resolved) in chunks {
                 let chunk = if !resolved {
-                    todo!();
-                    chunk
+                    let pixel = match &chunk {
+                        QoiChunk::RGB(rgb) => Pixel::from(rgb),
+                        QoiChunk::RGBA(rgba) => Pixel::from(rgba),
+                        _ => unreachable!()
+                    };
+                    global_state.lookup_pixel(pixel).unwrap_or(chunk)
                 } else {
                     chunk
                 };

@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::chunks::{QoiChunk, OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RUN};
 use crate::consts::*;
 use crate::util::Pixel;
@@ -136,6 +138,15 @@ impl QoiCodecState {
 
     pub(crate) fn run_length(&self) -> u8 {
         self.run_length
+    }
+
+    pub(crate) fn lookup_pixel(&self, pixel: Pixel) -> Option<QoiChunk> {
+        let hash_idx = pixel.hash();
+        if self.modified(hash_idx) {
+            Some(QoiChunk::INDEX(OP_INDEX::new(hash_idx.try_into().unwrap())))
+        } else {
+            None
+        }
     }
 }
 
