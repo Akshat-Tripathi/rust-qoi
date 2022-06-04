@@ -56,13 +56,6 @@ impl QoiCodecState {
             );
         }
 
-        //This is the only safe place for this.
-        //If we go into any of the above branches, it is guaranteed that the pixel would already
-        //be in the array, so we can skip it.
-        //If this was any further down, then continues would skip adding some pixels
-        self.previously_seen[hash_idx] = pixel;
-        self.modified |= 1 << hash_idx;
-
         // 3. Pixel diff > -3 but < 2 -> small diff
         if let Some(op_diff) = OP_DIFF::try_new(self.last_pixel, pixel) {
             return self.cleanup(chunks, Some(QoiChunk::DIFF(op_diff)), pixel);
@@ -94,6 +87,9 @@ impl QoiCodecState {
             let resolved = self.is_resolved(&chunk);
             chunks.push((chunk, resolved));
         }
+        let hash_idx = pixel.hash();
+        self.previously_seen[hash_idx] = pixel;
+        self.modified |= 1 << hash_idx;
         self.last_pixel = pixel;
         chunks
     }
@@ -142,7 +138,7 @@ impl QoiCodecState {
 
     pub(crate) fn lookup_pixel(&self, pixel: Pixel) -> Option<QoiChunk> {
         let hash_idx = pixel.hash();
-        if self.modified(hash_idx) {
+        if self.modified(hash_idx) && self.previously_seen[hash_idx] == pixel {
             Some(QoiChunk::INDEX(OP_INDEX::new(hash_idx.try_into().unwrap())))
         } else {
             None
