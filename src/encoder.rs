@@ -76,7 +76,8 @@ impl<W: Write> QoiEncoder<W> {
             // 0 => continue the previous run - so we need to fix all following run length encoded chunks
             // 1 => global_state.run_length = 0 - so we can keep going normally
             // 2 => previous run ended - so we can keep going normally
-            let mut chunks1 = global_state.process_pixel::<CHANNELS>(pixel);
+            let mut temp_state = global_state.clone();
+            let mut chunks1 = temp_state.process_pixel::<CHANNELS>(pixel);
 
             match chunks1.len() {
                 0 => {
