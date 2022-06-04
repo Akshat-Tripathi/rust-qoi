@@ -126,6 +126,12 @@ impl From<OP_RGB> for Pixel {
     }
 }
 
+impl From<&OP_RGB> for Pixel {
+    fn from(chunk: &OP_RGB) -> Self {
+        Pixel::new(chunk.r, chunk.g, chunk.b, chunk.a)
+    }
+}
+
 impl QOI_CHUNK<{ Self::SIZE }> for OP_RGB {
     fn to_bytes(&self) -> [u8; Self::SIZE] {
         [Self::FLAG, self.r, self.g, self.b]
@@ -169,6 +175,12 @@ impl OP_RGBA {
 
 impl From<OP_RGBA> for Pixel {
     fn from(chunk: OP_RGBA) -> Self {
+        Pixel::new(chunk.r, chunk.g, chunk.b, chunk.a)
+    }
+}
+
+impl From<&OP_RGBA> for Pixel {
+    fn from(chunk: &OP_RGBA) -> Self {
         Pixel::new(chunk.r, chunk.g, chunk.b, chunk.a)
     }
 }

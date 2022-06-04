@@ -96,10 +96,10 @@ impl QoiCodecState {
         chunks
     }
 
-    //TODO: Add check to modified bitset
     fn is_resolved(&self, chunk: &QoiChunk) -> bool {
         match chunk {
-            QoiChunk::RGB(_) | QoiChunk::RGBA(_) => false,
+            QoiChunk::RGB(rgb) => self.modified(Pixel::from(rgb).hash()),
+            QoiChunk::RGBA(rgba) => self.modified(Pixel::from(rgba).hash()),
             _ => true,
         }
     }
