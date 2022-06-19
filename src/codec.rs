@@ -4,7 +4,7 @@ use crate::chunks::{QoiChunk, OP_DIFF, OP_INDEX, OP_LUMA, OP_RGB, OP_RGBA, OP_RU
 use crate::consts::*;
 use crate::util::Pixel;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct QoiCodecState {
     last_pixel: Pixel,
     previously_seen: [Pixel; SEEN_PIXEL_ARRAY_SIZE],
@@ -25,7 +25,7 @@ impl QoiCodecState {
     pub(crate) fn process_pixel<const CHANNELS: u8>(
         &mut self,
         pixel: Pixel,
-    ) -> Vec<(QoiChunk, bool)> {
+    ) -> Vec<ChunkState> {
         let is_rgb = CHANNELS == RGB_CHANNELS;
 
         let mut chunks = vec![];
@@ -36,7 +36,7 @@ impl QoiCodecState {
             self.run_length += 1;
             return self.cleanup(chunks, None, pixel);
         } else if self.run_length > 0 {
-            chunks.push((QoiChunk::RUN(OP_RUN::new(self.run_length)), true));
+            chunks.push(ChunkState::Resolved(QoiChunk::RUN(OP_RUN::new(self.run_length))));
 
             if pixel == self.last_pixel {
                 self.run_length = 1;
@@ -79,13 +79,16 @@ impl QoiCodecState {
     #[inline]
     fn cleanup(
         &mut self,
-        mut chunks: Vec<(QoiChunk, bool)>,
+        mut chunks: Vec<ChunkState>,
         chunk: Option<QoiChunk>,
         pixel: Pixel,
-    ) -> Vec<(QoiChunk, bool)> {
+    ) -> Vec<ChunkState> {
         if let Some(chunk) = chunk {
-            let resolved = self.is_resolved(&chunk);
-            chunks.push((chunk, resolved));
+            chunks.push(if self.is_resolved(&chunk, &pixel) {
+                ChunkState::Resolved(chunk)
+            } else {
+                ChunkState::Unresolved(chunk, pixel.clone())
+            });
         }
         let hash_idx = pixel.hash();
         self.previously_seen[hash_idx] = pixel;
@@ -94,11 +97,11 @@ impl QoiCodecState {
         chunks
     }
 
-    fn is_resolved(&self, chunk: &QoiChunk) -> bool {
+    fn is_resolved(&self, chunk: &QoiChunk, pixel: &Pixel) -> bool {
         match chunk {
-            QoiChunk::RGB(rgb) => self.modified(Pixel::from(rgb).hash()),
-            QoiChunk::RGBA(rgba) => self.modified(Pixel::from(rgba).hash()),
-            _ => true,
+            QoiChunk::INDEX(_) => true,
+            QoiChunk::RUN(_) => true,
+            _ => self.modified(pixel.hash()),
         }
     }
 
@@ -136,9 +139,9 @@ impl QoiCodecState {
         self.run_length
     }
 
-    pub(crate) fn lookup_pixel(&self, pixel: Pixel) -> Option<QoiChunk> {
+    pub(crate) fn lookup_pixel(&self, pixel: &Pixel) -> Option<QoiChunk> {
         let hash_idx = pixel.hash();
-        if self.modified(hash_idx) && self.previously_seen[hash_idx] == pixel {
+        if self.modified(hash_idx) && self.previously_seen[hash_idx] == *pixel {
             Some(QoiChunk::INDEX(OP_INDEX::new(hash_idx.try_into().unwrap())))
         } else {
             None
@@ -166,6 +169,21 @@ impl QoiCodecState {
             self.last_pixel = self.lookup_chunk(chunk);
             self.previously_seen[self.last_pixel.hash()] = self.last_pixel;
             (self.last_pixel, 1)
+        }
+    }
+}
+
+//TODO: Better name
+pub(crate) enum ChunkState {
+    Resolved(QoiChunk),
+    Unresolved(QoiChunk, Pixel)
+}
+
+impl ChunkState {
+    pub(crate) fn get_chunk(self) -> QoiChunk {
+        match self {
+            ChunkState::Resolved(chunk) => chunk,
+            ChunkState::Unresolved(chunk, _) => chunk,
         }
     }
 }

@@ -5,7 +5,7 @@ use image::error::{ImageError, ImageFormatHint, UnsupportedError, UnsupportedErr
 use image::ImageEncoder;
 
 use crate::chunks::{QoiChunk, OP_RUN};
-use crate::codec::QoiCodecState;
+use crate::codec::{QoiCodecState, ChunkState};
 use crate::consts::*;
 use crate::util::Pixel;
 
@@ -18,7 +18,7 @@ impl<W: Write> QoiEncoder<W> {
         QoiEncoder { w }
     }
 
-    fn to_chunks<const CHANNELS: u8>(buf: &[u8]) -> (VecDeque<(QoiChunk, bool)>, QoiCodecState) {
+    fn to_chunks<const CHANNELS: u8>(buf: &[u8]) -> (VecDeque<ChunkState>, QoiCodecState) {
         let is_rgb = CHANNELS == RGB_CHANNELS;
 
         let mut chunks = VecDeque::new();
@@ -59,7 +59,8 @@ impl<W: Write> QoiEncoder<W> {
         // Stitch all the split up chunks back together
         let (chunks, mut global_state) = splits.next().unwrap();
 
-        for (chunk, _) in chunks {
+        for chunk_state in chunks {
+            let chunk = chunk_state.get_chunk();
             chunk
                 .encode(&mut self.w)
                 .map_err(|e| ImageError::IoError(e))?;
@@ -69,8 +70,8 @@ impl<W: Write> QoiEncoder<W> {
             //Fix first few chunks
             let initial_state = QoiCodecState::new();
 
-            let dummy = (QoiChunk::RUN(OP_RUN::new(0)), false);
-            let (first_chunk, _) = std::mem::replace(&mut chunks[0], dummy);
+            let dummy = ChunkState::Resolved(QoiChunk::RUN(OP_RUN::new(0)));
+            let first_chunk = std::mem::replace(&mut chunks[0], dummy).get_chunk();
             let pixel = initial_state.lookup_chunk(first_chunk);
 
             //Will return upto 2 chunks
@@ -80,33 +81,33 @@ impl<W: Write> QoiEncoder<W> {
             let mut temp_state = global_state.clone();
             let mut chunks1 = temp_state.process_pixel::<CHANNELS>(pixel);
 
-            dbg!(chunks.len());
             match chunks1.len() {
                 0 => {
                     chunks.pop_front(); //Get rid of the dummy chunk
-                    dbg!(chunks.len());
-                    let mut actual_run_length = temp_state.run_length();
+                    let mut actual_run_length = temp_state.run_length() as u32;
                     if chunks.len() > 0 {
-                        while let (QoiChunk::RUN(run), true) = &chunks[0] {
-                            actual_run_length += run.run_length();
+                        while let ChunkState::Resolved(QoiChunk::RUN(run)) = &chunks[0] {
+                            actual_run_length += run.run_length() as u32;
                             chunks.pop_front();
                         }
                     }
 
                     //We've run out of chunks, so try draining the global state
                     if chunks.len() == 0 {
-                        actual_run_length += global_state.run_length();
+                        actual_run_length += global_state.run_length() as u32;
                         global_state.drain();
                     }
 
-                    while actual_run_length > MAX_RUN_LENGTH {
+
+
+                    while actual_run_length > MAX_RUN_LENGTH as u32 {
                         QoiChunk::RUN(OP_RUN::new(MAX_RUN_LENGTH))
                             .encode(&mut self.w)
                             .map_err(|e| ImageError::IoError(e))?;
-                        actual_run_length -= MAX_RUN_LENGTH;
+                        actual_run_length -= MAX_RUN_LENGTH as u32;
                     }
                     if actual_run_length > 0 {
-                        QoiChunk::RUN(OP_RUN::new(actual_run_length))
+                        QoiChunk::RUN(OP_RUN::new(actual_run_length as u8))
                             .encode(&mut self.w)
                             .map_err(|e| ImageError::IoError(e))?;
                     }
@@ -117,22 +118,16 @@ impl<W: Write> QoiEncoder<W> {
                 2 => {
                     chunks[0] = chunks1.pop().unwrap();
                     
-                    let (run, _) = chunks1.pop().unwrap();
+                    let run = chunks1.pop().unwrap().get_chunk();
                     run.encode(&mut self.w)
                         .map_err(|e| ImageError::IoError(e))?;
                 }
                 _ => unreachable!(),
             };
-            for (chunk, resolved) in chunks {
-                let chunk = if !resolved {
-                    let pixel = match &chunk {
-                        QoiChunk::RGB(rgb) => Pixel::from(rgb),
-                        QoiChunk::RGBA(rgba) => Pixel::from(rgba),
-                        _ => unreachable!()
-                    };
-                    global_state.lookup_pixel(pixel).unwrap_or(chunk)
-                } else {
-                    chunk
+            for chunk_state in chunks {
+                let chunk = match chunk_state {
+                    ChunkState::Resolved(chunk) => chunk,
+                    ChunkState::Unresolved(chunk, pixel) => global_state.lookup_pixel(&pixel).unwrap_or(chunk),
                 };
                 chunk
                     .encode(&mut self.w)
