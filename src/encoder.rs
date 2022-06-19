@@ -103,12 +103,6 @@ impl<W: Write> QoiEncoder<W> {
                         }
                     }
 
-                    //We've run out of chunks, so try draining the global state
-                    if chunks.len() == 0 {
-                        actual_run_length += global_state.run_length() as u32;
-                        global_state.drain();
-                    }
-
                     while actual_run_length > MAX_RUN_LENGTH as u32 {
                         QoiChunk::RUN(OP_RUN::new(MAX_RUN_LENGTH))
                             .encode(&mut self.w)
