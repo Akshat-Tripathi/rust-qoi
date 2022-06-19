@@ -5,7 +5,7 @@ use image::error::{ImageError, ImageFormatHint, UnsupportedError, UnsupportedErr
 use image::ImageEncoder;
 
 use crate::chunks::{QoiChunk, OP_RUN};
-use crate::codec::{QoiCodecState, ChunkState};
+use crate::codec::{ChunkState, QoiCodecState};
 use crate::consts::*;
 use crate::util::Pixel;
 
@@ -81,8 +81,19 @@ impl<W: Write> QoiEncoder<W> {
             let mut temp_state = global_state.clone();
             let mut chunks1 = temp_state.process_pixel::<CHANNELS>(pixel);
 
+            //TODO: Bad hack fix this
+            if temp_state.run_length() > 0 && chunks1.len() == 1 {
+                chunks1
+                    .pop()
+                    .unwrap()
+                    .get_chunk()
+                    .encode(&mut self.w)
+                    .map_err(|e| ImageError::IoError(e))?;
+            }
+
             match chunks1.len() {
                 0 => {
+                    //The split was in the middle of a run
                     chunks.pop_front(); //Get rid of the dummy chunk
                     let mut actual_run_length = temp_state.run_length() as u32;
                     if chunks.len() > 0 {
@@ -98,8 +109,6 @@ impl<W: Write> QoiEncoder<W> {
                         global_state.drain();
                     }
 
-
-
                     while actual_run_length > MAX_RUN_LENGTH as u32 {
                         QoiChunk::RUN(OP_RUN::new(MAX_RUN_LENGTH))
                             .encode(&mut self.w)
@@ -113,11 +122,13 @@ impl<W: Write> QoiEncoder<W> {
                     }
                 }
                 1 => {
+                    //Normal split
                     chunks[0] = chunks1.pop().unwrap();
                 }
                 2 => {
+                    //The split ended a run
                     chunks[0] = chunks1.pop().unwrap();
-                    
+
                     let run = chunks1.pop().unwrap().get_chunk();
                     run.encode(&mut self.w)
                         .map_err(|e| ImageError::IoError(e))?;
@@ -127,7 +138,9 @@ impl<W: Write> QoiEncoder<W> {
             for chunk_state in chunks {
                 let chunk = match chunk_state {
                     ChunkState::Resolved(chunk) => chunk,
-                    ChunkState::Unresolved(chunk, pixel) => global_state.lookup_pixel(&pixel).unwrap_or(chunk),
+                    ChunkState::Unresolved(chunk, pixel) => {
+                        global_state.lookup_pixel(&pixel).unwrap_or(chunk)
+                    }
                 };
                 chunk
                     .encode(&mut self.w)
